@@ -4,6 +4,7 @@ import jax
 import jax.numpy as jnp
 import yaml
 
+from orbax.checkpoint import StandardCheckpointer
 
 from .cifar_dataset import get_cifar10_train_val_loaders
 from .metrics_logger import MetricsLogger
@@ -21,6 +22,7 @@ if __name__ == '__main__':
     
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", type=int, required=True, help="Seed for the initialization")
+    parser.add_argument("--job-id", type=int, required=True, help="Job id")
     args = parser.parse_args()
     
     config_path = os.path.join(os.path.dirname(__file__), "train_cifar10_config.yaml")
@@ -59,8 +61,14 @@ if __name__ == '__main__':
     del init_rng
 
     logdir = img_dir = os.path.join(os.path.dirname(__file__), "..", "out")
-    metrics_log_path = os.path.join(logdir, "metrics-sgd.csv")
+    metrics_log_path = os.path.join(logdir, f"metrics-sgd-{args.seed}.csv")
+    
+    # init checkpointer
+    checkpointer = StandardCheckpointer()
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    checkpoint_dir = os.path.join(script_dir, '..', 'checkpoints', 'sgd', str(args.job_id))
 
+    # training loop
     with MetricsLogger(metrics_log_path) as logger:
         
         for step, batch in enumerate(train_ds):
@@ -86,3 +94,6 @@ if __name__ == '__main__':
                     logger.update('val', metric, value)
                 
                 logger.end_epoch()
+    
+    checkpointer.save(checkpoint_dir, state)
+    checkpointer.close()
