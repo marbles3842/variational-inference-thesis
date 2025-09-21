@@ -2,6 +2,8 @@ cifar10:
   sgd:
     num_epochs: 200
     learning_rate: 0.2
-    batch_size: 50
+    train_batch_size: 50
+    val_batch_size: 50
     momentum: 0.9
     weight_decay: 2.0e-4
+    warmup_epochs: 5
