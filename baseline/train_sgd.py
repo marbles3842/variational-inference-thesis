@@ -1,7 +1,7 @@
+import argparse
 import os
 import jax
 import jax.numpy as jnp
-import optax
 import yaml
 
 
@@ -9,6 +9,7 @@ from .cifar_dataset import get_cifar10_train_val_loaders
 from .metrics_logger import MetricsLogger
 from .train_state import create_state
 from .optimizer import create_cifar_sgd_optimizer
+from .common import train_step, compute_metrics
 from models.resnet import ResNet20
 
 
@@ -16,45 +17,11 @@ NUM_CLASSES = 10
 CIFAR10_NUM_FILTERS = 16
 
 
-def cross_entropy_loss(logits, labels):
-    loss = optax.softmax_cross_entropy_with_integer_labels(logits=logits, labels=labels)
-    return jnp.mean(loss)
-
-
-@jax.jit
-def train_step(state, batch):
-    def loss_fn(params):
-        variables = {'params': params, 'batch_stats': state.batch_stats}
-        logits, new_model_state = state.apply_fn(
-            variables,
-            batch['image'],
-            train=True,
-            mutable=['batch_stats'], 
-        )
-        loss = cross_entropy_loss(logits=logits, labels=batch['label'])
-        return loss, new_model_state
-
-    (loss, new_model_state), grads = jax.value_and_grad(loss_fn, has_aux=True)(state.params)
-    new_state = state.apply_gradients(grads=grads)
-    new_state = new_state.replace(batch_stats=new_model_state['batch_stats'])
-    return new_state
-
-
-@jax.jit
-def compute_metrics(*, state, batch):
-    variables = {'params': state.params, 'batch_stats': state.batch_stats}
-    logits = state.apply_fn(variables, batch['image'], train=False) 
-    loss = cross_entropy_loss(logits, batch['label'])
-    metric_update = state.metrics.single_from_model_output(
-        logits=logits,
-        labels=batch['label'],
-        loss=loss
-    )
-    metrics = state.metrics.merge(metric_update)
-    return state.replace(metrics=metrics)
-
-
 if __name__ == '__main__':
+    
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--seed", type=int, required=True, help="Seed for the initialization")
+    args = parser.parse_args()
     
     config_path = os.path.join(os.path.dirname(__file__), "train_cifar10_config.yaml")
 
@@ -65,17 +32,17 @@ if __name__ == '__main__':
 
     model = ResNet20(num_classes=NUM_CLASSES, num_filters=CIFAR10_NUM_FILTERS)
     
+    init_rng = jax.random.key(args.seed)
+    
 
     train_ds, val_ds = get_cifar10_train_val_loaders(
         train_batch_size=config['train_batch_size'], 
         val_batch_size=config['val_batch_size'],
-        seed=43, 
+        seed=args.seed, 
         num_epochs=config['num_epochs']
     )
 
     num_steps_per_epoch = jnp.ceil(train_ds._data_source.__len__()/config['train_batch_size']).astype(jnp.int32)
-
-    init_rng = jax.random.key(0)
     
     optimizer = create_cifar_sgd_optimizer(
         learning_rate=config['learning_rate'],
