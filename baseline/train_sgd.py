@@ -10,12 +10,30 @@ from .cifar_dataset import get_cifar10_train_val_loaders
 from .metrics_logger import MetricsLogger
 from .train_state import create_state
 from .optimizer import create_cifar_sgd_optimizer
-from .common import train_step, compute_metrics
+from .common import compute_metrics, cross_entropy_loss
 from models.resnet import ResNet20
 
 
 NUM_CLASSES = 10
 CIFAR10_NUM_FILTERS = 16
+
+@jax.jit
+def train_step(state, batch):
+    def loss_fn(params):
+        variables = {'params': params, 'batch_stats': state.batch_stats}
+        logits, new_model_state = state.apply_fn(
+            variables,
+            batch['image'],
+            train=True,
+            mutable=['batch_stats'], 
+        )
+        loss = cross_entropy_loss(logits=logits, labels=batch['label'])
+        return loss, new_model_state
+
+    (loss, new_model_state), grads = jax.value_and_grad(loss_fn, has_aux=True)(state.params)
+    new_state = state.apply_gradients(grads=grads)
+    new_state = new_state.replace(batch_stats=new_model_state['batch_stats'])
+    return new_state
 
 
 if __name__ == '__main__':
@@ -60,8 +78,8 @@ if __name__ == '__main__':
 
     del init_rng
 
-    logdir = img_dir = os.path.join(os.path.dirname(__file__), "..", "out")
-    metrics_log_path = os.path.join(logdir, f"metrics-sgd-{args.seed}.csv")
+    logdir = img_dir = os.path.join(os.path.dirname(__file__), "..", "out", 'sgd')
+    metrics_log_path = os.path.join(logdir, f"train-metrics-sgd-{args.seed}.csv")
     
     # init checkpointer
     checkpointer = StandardCheckpointer()
