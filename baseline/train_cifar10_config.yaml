@@ -4,6 +4,19 @@ cifar10:
     learning_rate: 0.2
     train_batch_size: 50
     val_batch_size: 50
+    test_batch_size: 128
+    momentum: 0.9
+    weight_decay: 2.0e-4
+    warmup_epochs: 5
+  ivon:
+    num_epochs: 200
+    learning_rate: 0.2
+    momentum_hess: 0.99999
+    ess: 50000.0
+    hess_init: 0.5
+    train_batch_size: 50
+    val_batch_size: 50
+    test_batch_size: 128
     momentum: 0.9
     weight_decay: 2.0e-4
     warmup_epochs: 5
