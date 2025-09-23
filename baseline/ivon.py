@@ -1,5 +1,5 @@
 """
-JAX implementation of the IVON optimizer by Yuesong Shen 
+JAX implementation of the IVON optimizer by Yuesong Shen
 
 https://github.com/ysngshn/ivon-optax/blob/main/ivon.py
 
@@ -79,9 +79,7 @@ def accumulate_gradients(
     else:
         grad_acc = jtree.map(lambda a, g: a + g, grad_acc, updates)
         nxg_acc = jtree.map(lambda a, g, n: a + n * g, nxg_acc, updates, noise)
-    ivonstate = IVONState(
-        *ivonstate[:-4], grad_acc, nxg_acc, None, old_count + 1
-    )
+    ivonstate = IVONState(*ivonstate[:-4], grad_acc, nxg_acc, None, old_count + 1)
     states = (ivonstate, *states[1:])
     return states
 
@@ -201,9 +199,7 @@ def scale_by_ivon(
     axis_name: str | None = None,
 ) -> optax.GradientTransformation:
     def init_fn(params: optax.Params) -> IVONState:
-        return ivon_init(
-            params, ess, hess_init, beta1, beta2, weight_decay, axis_name
-        )
+        return ivon_init(params, ess, hess_init, beta1, beta2, weight_decay, axis_name)
 
     return optax.GradientTransformation(init_fn, ivon_update)
 
