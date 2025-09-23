@@ -14,8 +14,8 @@ from core.ivon import sample_parameters
 from data_loaders.cifar10_dataloader import get_cifar10_train_val_loaders
 from models.resnet import ResNet20
 from logger.metrics_logger import MetricsLogger
-from .train_state import create_train_state
-from .common import compute_metrics, cross_entropy_loss
+from trainer.train_state import create_train_state
+from trainer.metrics import compute_metrics, cross_entropy_loss
 
 NUM_CLASSES = 10
 CIFAR10_NUM_FILTERS = 16

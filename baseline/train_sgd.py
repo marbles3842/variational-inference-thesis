@@ -10,12 +10,11 @@ from core.optimizer import create_cifar_sgd_optimizer
 from data_loaders.cifar10_dataloader import get_cifar10_train_val_loaders
 from models.resnet import ResNet20
 from logger.metrics_logger import MetricsLogger
-from .train_state import create_train_state
-from .common import compute_metrics, cross_entropy_loss
+from trainer.train_state import create_train_state
+from trainer.metrics import compute_metrics, cross_entropy_loss
 
 
 NUM_CLASSES = 10
-CIFAR10_NUM_FILTERS = 16
 
 
 @jax.jit
@@ -54,7 +53,9 @@ if __name__ == "__main__":
         config = yaml.safe_load(file)
         config = config["cifar10"]["sgd"]
 
-    model = ResNet20(num_classes=NUM_CLASSES, num_filters=CIFAR10_NUM_FILTERS)
+    model = ResNet20(num_classes=NUM_CLASSES)
+
+    print(model.tabulate(jax.random.PRNGKey(0), jnp.ones([1, 32, 32, 3]), train=True))
 
     init_rng = jax.random.key(args.seed)
 
@@ -82,10 +83,10 @@ if __name__ == "__main__":
         model=model, rng=init_rng, x0=jnp.ones([1, 32, 32, 3]), optimizer=optimizer
     )
 
-    del init_rng
-
     logdir = img_dir = os.path.join(os.path.dirname(__file__), "..", "out", "sgd")
-    metrics_log_path = os.path.join(logdir, f"train-metrics-sgd-{args.seed}.csv")
+    metrics_log_path = os.path.join(
+        logdir, f"train-metrics-sgd-{args.seed}-preresnet110.csv"
+    )
 
     # init checkpointer
     checkpointer = StandardCheckpointer()

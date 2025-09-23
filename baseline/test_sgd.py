@@ -9,13 +9,11 @@ from orbax.checkpoint import StandardCheckpointer
 from data_loaders.cifar10_dataloader import get_cifar10_test_loader
 from models.resnet import ResNet20
 from logger.concurrent_logger import ConcurrentMetricsLogger
-from .train_state import create_eval_state
-from .common import compute_metrics
+from trainer.train_state import create_eval_state
+from trainer.metrics import compute_metrics
 
 
 NUM_CLASSES = 10
-CIFAR10_NUM_FILTERS = 16
-
 
 if __name__ == "__main__":
 
@@ -37,7 +35,7 @@ if __name__ == "__main__":
         config = yaml.safe_load(file)
         config = config["cifar10"]["sgd"]
 
-    model = ResNet20(num_classes=NUM_CLASSES, num_filters=CIFAR10_NUM_FILTERS)
+    model = ResNet20(num_classes=NUM_CLASSES)
 
     init_rng = jax.random.key(args.seed)
 
@@ -45,16 +43,16 @@ if __name__ == "__main__":
         batch_size=config["test_batch_size"],
     )
 
-    state = create_eval_state(model=model, rng=init_rng, x0=jnp.ones([1, 32, 32, 3]))
-
     # init checkpointer
     checkpointer = StandardCheckpointer()
 
     checkpoint_data = checkpointer.restore(directory=args.last_checkpoint)
 
-    state = state.replace(
-        params=checkpoint_data["params"],
-        batch_stats=checkpoint_data.get("batch_stats", state.batch_stats),
+    state = create_eval_state(
+        model=model,
+        rng=init_rng,
+        x0=jnp.ones([1, 32, 32, 3]),
+        last_checkpoint_data=checkpoint_data,
     )
 
     logdir = img_dir = os.path.join(os.path.dirname(__file__), "..", "out", "sgd")
