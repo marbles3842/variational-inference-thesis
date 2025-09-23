@@ -8,7 +8,7 @@ from orbax.checkpoint import StandardCheckpointer
 
 from .cifar_dataset import get_cifar10_train_val_loaders
 from .metrics_logger import MetricsLogger
-from .train_state import create_state
+from .train_state import create_train_state
 from .optimizer import create_cifar_sgd_optimizer
 from .common import compute_metrics, cross_entropy_loss
 from models.resnet import ResNet20
@@ -78,7 +78,7 @@ if __name__ == "__main__":
         weight_decay=config["weight_decay"],
     )
 
-    state = create_state(
+    state = create_train_state(
         model=model, rng=init_rng, x0=jnp.ones([1, 32, 32, 3]), optimizer=optimizer
     )
 
