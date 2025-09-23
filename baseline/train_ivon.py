@@ -10,8 +10,8 @@ from jax.tree_util import tree_map
 
 from .ivon import sample_parameters
 
-from .cifar_dataset import get_cifar10_train_val_loaders
-from .metrics_logger import MetricsLogger
+from data_loaders.cifar10_dataloader import get_cifar10_train_val_loaders
+from logger.metrics_logger import MetricsLogger
 from .train_state import create_train_state
 from .optimizer import create_cifar_ivon_optimizer
 from .common import compute_metrics, cross_entropy_loss

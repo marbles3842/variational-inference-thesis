@@ -6,8 +6,8 @@ import yaml
 
 from orbax.checkpoint import StandardCheckpointer
 
-from .cifar_dataset import get_cifar10_test_loader
-from .metrics_logger import ConcurrentMetricsLogger
+from data_loaders.cifar10_dataloader import get_cifar10_test_loader
+from logger.metrics_logger import ConcurrentMetricsLogger
 from .train_state import create_eval_state
 from .common import compute_metrics
 from models.resnet import ResNet20
