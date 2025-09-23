@@ -12,13 +12,12 @@ from jax.tree_util import tree_map
 from core.optimizer import create_cifar_ivon_optimizer
 from core.ivon import sample_parameters
 from data_loaders.cifar10_dataloader import get_cifar10_train_val_loaders
-from models.resnet import ResNet20
+from models import get_cifar10_model
 from logger.metrics_logger import MetricsLogger
 from trainer.train_state import create_train_state
 from trainer.metrics import compute_metrics, cross_entropy_loss
 
 NUM_CLASSES = 10
-CIFAR10_NUM_FILTERS = 16
 
 
 @jax.jit
@@ -73,6 +72,13 @@ if __name__ == "__main__":
         "--seed", type=int, required=True, help="Seed for the initialization"
     )
     parser.add_argument("--job-id", type=int, required=True, help="Job id")
+    parser.add_argument(
+        "--model-name",
+        type=str,
+        required=True,
+        help="Model to train",
+        choices=["resnet20"],
+    )
     args = parser.parse_args()
 
     config_path = os.path.join(os.path.dirname(__file__), "train_cifar10_config.yaml")
@@ -81,7 +87,7 @@ if __name__ == "__main__":
         config = yaml.safe_load(file)
         config = config["cifar10"]["ivon"]
 
-    model = ResNet20(num_classes=NUM_CLASSES, num_filters=CIFAR10_NUM_FILTERS)
+    model = get_cifar10_model(model_name=args.model_name, num_classes=NUM_CLASSES)
 
     init_rng = random.key(args.seed)
 
@@ -115,7 +121,9 @@ if __name__ == "__main__":
     )
 
     logdir = img_dir = os.path.join(os.path.dirname(__file__), "..", "out", "ivon")
-    metrics_log_path = os.path.join(logdir, f"metrics-ivon-{args.seed}.csv")
+    metrics_log_path = os.path.join(
+        logdir, f"train-metrics-ivon-{args.model_name}-{args.seed}.csv"
+    )
 
     # init checkpointer
     checkpointer = StandardCheckpointer()

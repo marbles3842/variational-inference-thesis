@@ -7,7 +7,7 @@ import yaml
 from orbax.checkpoint import StandardCheckpointer
 
 from data_loaders.cifar10_dataloader import get_cifar10_test_loader
-from models.resnet import ResNet20
+from models import get_cifar10_model
 from logger.concurrent_logger import ConcurrentMetricsLogger
 from trainer.train_state import create_eval_state
 from trainer.metrics import compute_metrics
@@ -26,6 +26,13 @@ if __name__ == "__main__":
         "--last-checkpoint", type=str, required=True, help="Path to the last checkpoint"
     )
     parser.add_argument("--job-id", type=int, required=True, help="The job id")
+    parser.add_argument(
+        "--model-name",
+        type=str,
+        required=True,
+        help="Model to train",
+        choices=["resnet20"],
+    )
     args = parser.parse_args()
 
     print(args.last_checkpoint)
@@ -36,7 +43,7 @@ if __name__ == "__main__":
         config = yaml.safe_load(file)
         config = config["cifar10"]["ivon"]
 
-    model = ResNet20(num_classes=NUM_CLASSES)
+    model = get_cifar10_model(model_name=args.model_name, num_classes=NUM_CLASSES)
 
     init_rng = jax.random.key(args.seed)
 
@@ -56,7 +63,7 @@ if __name__ == "__main__":
     )
 
     logdir = img_dir = os.path.join(os.path.dirname(__file__), "..", "out", "ivon")
-    metrics_log_path = os.path.join(logdir, "test-metrics-ivon.csv")
+    metrics_log_path = os.path.join(logdir, f"test-metrics-ivon-{args.model_name}.csv")
 
     for test_batch in test_ds:
         test_batch = jax.device_put(test_batch)

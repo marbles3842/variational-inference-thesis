@@ -15,7 +15,8 @@ VENV_DIR=/zhome/da/9/204020
 PYTHON_VERSION=3.12.11  
 PROJECT_DIR=/zhome/da/9/204020/variational-inference-thesis
 
-SEED=4
+MODEL_NAME=resnet20
+SEED=0
 
 CHECKPOINT_DIR="${PROJECT_DIR}/checkpoints/ivon/${LSB_JOBID}"
 
@@ -27,6 +28,6 @@ module load $(module avail -o modulepath -t -C "python-${PYTHON_VERSION}" 2>&1 |
 
 source "${VENV_DIR}/${VENV_NAME}/bin/activate"
 
-python -m baseline.train_ivon --seed "$SEED"  --job-id "$LSB_JOBID"
+python -m baseline.train_ivon --seed "$SEED"  --job-id "$LSB_JOBID" --model-name "$MODEL_NAME"
 
-python -m baseline.test_ivon --seed "$SEED"  --last-checkpoint "$CHECKPOINT_DIR" --job-id "$LSB_JOBID"
+python -m baseline.test_ivon --seed "$SEED"  --last-checkpoint "$CHECKPOINT_DIR" --job-id "$LSB_JOBID" --model-name "$MODEL_NAME"

@@ -8,7 +8,7 @@ from orbax.checkpoint import StandardCheckpointer
 
 from core.optimizer import create_cifar_sgd_optimizer
 from data_loaders.cifar10_dataloader import get_cifar10_train_val_loaders
-from models.resnet import ResNet20
+from models import get_cifar10_model
 from logger.metrics_logger import MetricsLogger
 from trainer.train_state import create_train_state
 from trainer.metrics import compute_metrics, cross_entropy_loss
@@ -45,6 +45,13 @@ if __name__ == "__main__":
         "--seed", type=int, required=True, help="Seed for the initialization"
     )
     parser.add_argument("--job-id", type=int, required=True, help="Job id")
+    parser.add_argument(
+        "--model-name",
+        type=str,
+        required=True,
+        help="Model to train",
+        choices=["resnet20"],
+    )
     args = parser.parse_args()
 
     config_path = os.path.join(os.path.dirname(__file__), "train_cifar10_config.yaml")
@@ -53,7 +60,7 @@ if __name__ == "__main__":
         config = yaml.safe_load(file)
         config = config["cifar10"]["sgd"]
 
-    model = ResNet20(num_classes=NUM_CLASSES)
+    model = get_cifar10_model(model_name=args.model_name, num_classes=NUM_CLASSES)
 
     print(model.tabulate(jax.random.PRNGKey(0), jnp.ones([1, 32, 32, 3]), train=True))
 
@@ -85,7 +92,7 @@ if __name__ == "__main__":
 
     logdir = img_dir = os.path.join(os.path.dirname(__file__), "..", "out", "sgd")
     metrics_log_path = os.path.join(
-        logdir, f"train-metrics-sgd-{args.seed}-preresnet110.csv"
+        logdir, f"train-metrics-sgd-{args.model_name}-{args.seed}.csv"
     )
 
     # init checkpointer
