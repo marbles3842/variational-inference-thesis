@@ -101,4 +101,4 @@ class ResNet(nn.Module):
         return x
 
 
-ResNet20 = partial(ResNet, stage_sizes=(3, 3, 3), block=BasicBlock)
+ResNet20 = partial(ResNet, stage_sizes=(3, 3, 3), block=BasicBlock, num_filters=16)
