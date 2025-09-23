@@ -41,23 +41,23 @@ def create_train_state(model, rng, x0, optimizer):
     )
 
 
-def create_eval_state(model, rng, x0):
+def create_eval_state(model, rng, x0, last_checkpoint_data):
     """Create evaluation state with model parameters and an identity optimizer.
 
     Args:
         model: Flax model
         rng: Random key for initialization
-        x0: Sample input for shape inference
+        x0: Sample input for shape inference,
+        last_checkpoint_data: Data from the last checkpoint
 
     Returns:
         TrainState with initialized parameters and identity optimizer
     """
     variables = model.init(rng, x0, train=False)
-    params = variables["params"]
-    batch_stats = variables.get("batch_stats", {})
+    batch_stats = last_checkpoint_data.get("batch_stats", variables.get("batch_stats", {})),
     return TrainState.create(
         apply_fn=model.apply,
-        params=params,
+        params=last_checkpoint_data["params"],
         tx=optax.identity(),
         metrics=Metrics.empty(),
         batch_stats=batch_stats,
