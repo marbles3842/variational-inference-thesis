@@ -6,15 +6,16 @@ https://github.com/google/flax/blob/main/examples/imagenet/models.py
 
 """
 
-import flax.linen as nn
-import jax.numpy as jnp
-
 from typing import Any
 from collections.abc import Callable, Sequence
 from functools import partial
 
+import flax.linen as nn
+import jax.numpy as jnp
+
 
 ModuleDef = Any
+
 
 class BasicBlock(nn.Module):
     filters: int
@@ -30,8 +31,8 @@ class BasicBlock(nn.Module):
             features=self.filters,
             kernel_size=(3, 3),
             strides=self.strides,
-            use_bias=False,   
-            padding='SAME'
+            use_bias=False,
+            padding="SAME",
         )(x)
         out = self.norm()(out)
         out = self.activation(out)
@@ -39,9 +40,9 @@ class BasicBlock(nn.Module):
         out = nn.Conv(
             features=self.filters,
             kernel_size=(3, 3),
-            strides=(1, 1),       
-            use_bias=False,       
-            padding='SAME'
+            strides=(1, 1),
+            use_bias=False,
+            padding="SAME",
         )(out)
         out = self.norm(scale_init=nn.initializers.zeros_init())(out)
 
@@ -51,13 +52,13 @@ class BasicBlock(nn.Module):
                 kernel_size=(1, 1),
                 strides=self.strides,
                 use_bias=False,
-                padding='SAME',
-                name='conv_proj',
+                padding="SAME",
+                name="conv_proj",
             )(residual)
-            residual = self.norm(name='norm_proj')(residual)
+            residual = self.norm(name="norm_proj")(residual)
 
         return self.activation(out + residual)
-    
+
 
 class ResNet(nn.Module):
     stage_sizes: Sequence[int]
@@ -65,23 +66,20 @@ class ResNet(nn.Module):
     num_classes: int
     num_filters: int
     activation: Callable = nn.relu
-    dtype: Any = jnp.float32  
+    dtype: Any = jnp.float32
 
     @nn.compact
     def __call__(self, x, train: bool = True):
-        
+
         norm = partial(
-            nn.BatchNorm,
-            use_running_average=not train,
-            momentum=0.9,
-            epsilon=1e-5
+            nn.BatchNorm, use_running_average=not train, momentum=0.9, epsilon=1e-5
         )
 
         x = nn.Conv(
             features=self.num_filters,
             kernel_size=(3, 3),
             strides=(1, 1),
-            padding='SAME',
+            padding="SAME",
             use_bias=False,
         )(x)
         x = norm()(x)
@@ -91,7 +89,7 @@ class ResNet(nn.Module):
             for j in range(block_size):
                 strides = (2, 2) if (i > 0 and j == 0) else (1, 1)
                 x = self.block(
-                    self.num_filters * (2 ** i),
+                    self.num_filters * (2**i),
                     strides=strides,
                     norm=norm,
                     activation=self.activation,
@@ -102,4 +100,5 @@ class ResNet(nn.Module):
         x = jnp.asarray(x, self.dtype)
         return x
 
-ResNet20 = partial(ResNet, stage_sizes = (3, 3, 3), block = BasicBlock)
+
+ResNet20 = partial(ResNet, stage_sizes=(3, 3, 3), block=BasicBlock)
