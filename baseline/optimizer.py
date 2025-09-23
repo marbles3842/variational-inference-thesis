@@ -1,5 +1,6 @@
 import optax
 
+from .ivon import ivon
 
 def create_warmup_cosine_schedule(
     init_lr: float,
@@ -75,5 +76,50 @@ def create_cifar_sgd_optimizer(
 
     if weight_decay > 0:
         optimizer = optax.chain(optax.add_decayed_weights(weight_decay), optimizer)
+
+    return optimizer
+
+def create_cifar_ivon_optimizer(
+    learning_rate: float,
+    warmup_epochs: int,
+    total_epochs: int,
+    hess_init: float, 
+    steps_per_epoch: int,
+    momentum: float,
+    momentum_hess: float,
+    ess: float,
+    weight_decay: float
+):  
+    """
+    Creates IVON optimizer with warmup + cosine annealing schedule.
+    
+    Args:
+        learning_rate: Peak learning rate
+        warmup_epochs: Warmup period
+        total_epochs: Total training epochs
+        hess_init: Initial Hessian diagonal estimate
+        steps_per_epoch: Steps per epoch (dataset_size // batch_size)
+        momentum: Gradient momentum (beta1)
+        momentum_hess: Hessian momentum (beta2)
+        ess: Effective sample size parameter
+        weight_decay: L2 regularization strength
+    """
+    
+    lr_schedule = create_warmup_cosine_schedule(
+        init_lr=learning_rate,
+        warmup_epochs=warmup_epochs,
+        total_epochs=total_epochs,
+        steps_per_epoch=steps_per_epoch,
+        end_lr=0.0
+    )
+    
+    optimizer = ivon(
+        learning_rate=lr_schedule,
+        ess=ess,
+        hess_init=hess_init,
+        weight_decay=weight_decay,
+        beta1=momentum,
+        beta2=momentum_hess
+    )
 
     return optimizer
