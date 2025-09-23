@@ -10,7 +10,7 @@ def cross_entropy_loss(logits, labels):
 @jax.jit
 def compute_metrics(*, state, batch):
     variables = {'params': state.params, 'batch_stats': state.batch_stats}
-    logits = state.apply_fn(variables, batch['image'], train=False) 
+    logits = state.apply_fn(variables, batch['image'], train=False)
     loss = cross_entropy_loss(logits, batch['label'])
     metric_update = state.metrics.single_from_model_output(
         logits=logits,
