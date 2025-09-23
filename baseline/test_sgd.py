@@ -7,10 +7,10 @@ import yaml
 from orbax.checkpoint import StandardCheckpointer
 
 from data_loaders.cifar10_dataloader import get_cifar10_test_loader
-from logger.metrics_logger import ConcurrentMetricsLogger
+from models.resnet import ResNet20
+from logger.concurrent_logger import ConcurrentMetricsLogger
 from .train_state import create_eval_state
 from .common import compute_metrics
-from models.resnet import ResNet20
 
 
 NUM_CLASSES = 10
@@ -58,7 +58,7 @@ if __name__ == "__main__":
     )
 
     logdir = img_dir = os.path.join(os.path.dirname(__file__), "..", "out", "sgd")
-    metrics_log_path = os.path.join(logdir, f"test-metrics-sgd.csv")
+    metrics_log_path = os.path.join(logdir, "test-metrics-sgd.csv")
 
     for test_batch in test_ds:
         test_batch = jax.device_put(test_batch)

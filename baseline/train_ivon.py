@@ -8,15 +8,14 @@ from orbax.checkpoint import StandardCheckpointer
 from jax import lax, random
 from jax.tree_util import tree_map
 
-from .ivon import sample_parameters
 
+from core.optimizer import create_cifar_ivon_optimizer
+from core.ivon import sample_parameters
 from data_loaders.cifar10_dataloader import get_cifar10_train_val_loaders
+from models.resnet import ResNet20
 from logger.metrics_logger import MetricsLogger
 from .train_state import create_train_state
-from .optimizer import create_cifar_ivon_optimizer
 from .common import compute_metrics, cross_entropy_loss
-from models.resnet import ResNet20
-
 
 NUM_CLASSES = 10
 CIFAR10_NUM_FILTERS = 16

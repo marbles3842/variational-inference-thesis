@@ -6,12 +6,12 @@ import yaml
 
 from orbax.checkpoint import StandardCheckpointer
 
+from core.optimizer import create_cifar_sgd_optimizer
 from data_loaders.cifar10_dataloader import get_cifar10_train_val_loaders
+from models.resnet import ResNet20
 from logger.metrics_logger import MetricsLogger
 from .train_state import create_train_state
-from .optimizer import create_cifar_sgd_optimizer
 from .common import compute_metrics, cross_entropy_loss
-from models.resnet import ResNet20
 
 
 NUM_CLASSES = 10
