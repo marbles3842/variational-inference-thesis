@@ -4,6 +4,5 @@ optax
 clu
 pyyaml
 numpy
-matplotlib
 datasets
 grain
