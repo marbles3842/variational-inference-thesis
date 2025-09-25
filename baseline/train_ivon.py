@@ -12,7 +12,7 @@ from jax.tree_util import tree_map
 from core.optimizer import create_cifar_ivon_optimizer
 from core.ivon import sample_parameters
 from data_loaders.cifar10_dataloader import get_cifar10_train_val_loaders
-from models import get_cifar10_model
+from models import get_cifar10_model, get_supported_models_names
 from logger.metrics_logger import MetricsLogger
 from trainer.train_state import create_train_state
 from trainer.metrics import compute_metrics, cross_entropy_loss
@@ -77,7 +77,7 @@ if __name__ == "__main__":
         type=str,
         required=True,
         help="Model to train",
-        choices=["resnet20"],
+        choices=get_supported_models_names(),
     )
     args = parser.parse_args()
 

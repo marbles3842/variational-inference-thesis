@@ -53,8 +53,8 @@ def create_eval_state(model, rng, x0, last_checkpoint_data):
     Returns:
         TrainState with initialized parameters and identity optimizer
     """
-    variables = model.init(rng, x0, train=False)
-    batch_stats = last_checkpoint_data.get("batch_stats", variables.get("batch_stats", {})),
+    model.init(rng, x0, train=False)
+    batch_stats = last_checkpoint_data["batch_stats"]
     return TrainState.create(
         apply_fn=model.apply,
         params=last_checkpoint_data["params"],

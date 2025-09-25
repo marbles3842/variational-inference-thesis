@@ -7,7 +7,7 @@ import yaml
 from orbax.checkpoint import StandardCheckpointer
 
 from data_loaders.cifar10_dataloader import get_cifar10_test_loader
-from models import get_cifar10_model
+from models import get_cifar10_model, get_supported_models_names
 from logger.concurrent_logger import ConcurrentMetricsLogger
 from trainer.train_state import create_eval_state
 from trainer.metrics import compute_metrics
@@ -30,7 +30,7 @@ if __name__ == "__main__":
         type=str,
         required=True,
         help="Model to train",
-        choices=["resnet20"],
+        choices=get_supported_models_names(),
     )
     args = parser.parse_args()
 
