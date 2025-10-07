@@ -1,14 +1,8 @@
 from typing import Any
-from clu import metrics
 from flax.training import train_state
 from flax.core import FrozenDict
-from flax import struct
 
-
-@struct.dataclass
-class Metrics(metrics.Collection):
-    accuracy: metrics.Accuracy
-    loss: metrics.Average.from_output("loss")
+from .metrics import Metrics
 
 
 class TrainState(train_state.TrainState):
