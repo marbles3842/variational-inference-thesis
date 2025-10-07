@@ -24,7 +24,6 @@ def train_step(state, batch):
         logits, new_model_state = state.apply_fn(
             variables,
             batch["image"],
-            train=True,
             mutable=["batch_stats"],
         )
         loss = cross_entropy_loss(logits=logits, labels=batch["label"])
@@ -62,7 +61,7 @@ if __name__ == "__main__":
 
     model = get_cifar10_model(model_name=args.model_name, num_classes=NUM_CLASSES)
 
-    print(model.tabulate(jax.random.PRNGKey(0), jnp.ones([1, 32, 32, 3]), train=True))
+    print(model.tabulate(jax.random.PRNGKey(0), jnp.ones([1, 32, 32, 3])))
 
     init_rng = jax.random.key(args.seed)
 
