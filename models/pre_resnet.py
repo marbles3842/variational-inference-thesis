@@ -5,6 +5,8 @@ from functools import partial
 import flax.linen as nn
 import jax.numpy as jnp
 
+from .filter_response_norm import FilterResponseNorm
+
 
 ModuleDef = Any
 
@@ -61,11 +63,9 @@ class PreResNet(nn.Module):
     dtype: Any = jnp.float32
 
     @nn.compact
-    def __call__(self, x, train: bool = True):
+    def __call__(self, x):
 
-        norm = partial(
-            nn.BatchNorm, use_running_average=not train, momentum=0.9, epsilon=1e-5
-        )
+        norm = partial(FilterResponseNorm)
 
         x = nn.Conv(
             features=self.num_filters,

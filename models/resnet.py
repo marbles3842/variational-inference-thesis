@@ -1,6 +1,8 @@
 """
 ResNet implementation in Flax.
 
+By default uses Filter Response Norm
+
 Inspired by the official Flax ImageNet example:
 https://github.com/google/flax/blob/main/examples/imagenet/models.py
 
@@ -12,6 +14,8 @@ from functools import partial
 
 import flax.linen as nn
 import jax.numpy as jnp
+
+from .filter_response_norm import FilterResponseNorm
 
 
 ModuleDef = Any
@@ -44,7 +48,7 @@ class BasicBlock(nn.Module):
             use_bias=False,
             padding="SAME",
         )(out)
-        out = self.norm(scale_init=nn.initializers.zeros_init())(out)
+        out = self.norm()(out)
 
         if residual.shape != out.shape:
             residual = nn.Conv(
@@ -69,11 +73,9 @@ class ResNet(nn.Module):
     dtype: Any = jnp.float32
 
     @nn.compact
-    def __call__(self, x, train: bool = True):
+    def __call__(self, x):
 
-        norm = partial(
-            nn.BatchNorm, use_running_average=not train, momentum=0.9, epsilon=1e-5
-        )
+        norm = partial(FilterResponseNorm)
 
         x = nn.Conv(
             features=self.num_filters,
