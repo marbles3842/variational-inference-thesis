@@ -1,4 +1,5 @@
 import optax
+from jax.tree_util import tree_structure, tree_flatten_with_path, tree_unflatten
 
 from .ivon import ivon
 
@@ -25,7 +26,7 @@ def create_warmup_cosine_schedule(
     """
     warmup_steps = warmup_epochs * steps_per_epoch
     total_steps = total_epochs * steps_per_epoch
-    cosine_steps = total_steps - warmup_steps
+    cosine_steps = total_steps
 
     warmup_schedule = optax.linear_schedule(
         init_value=init_lr / warmup_epochs,
@@ -44,13 +45,29 @@ def create_warmup_cosine_schedule(
     return schedule
 
 
+def _weight_decay_mask_fn(params):
+    """Only apply weight decay to 'kernel' parameters (conv/dense weights)"""
+
+    def should_decay(path):
+        param_name = path[-1].key if hasattr(path[-1], "key") else str(path[-1])
+
+        # Only apply weight decay to kernel/weight parameters
+        # Exclude: bias, gamma, beta, tau, scale, shift, etc.
+        return param_name in ["kernel", "weight"]
+
+    flat_params = tree_flatten_with_path(params)[0]
+    mask_flat = [should_decay(path) for path, _ in flat_params]
+
+    return tree_unflatten(tree_structure(params), mask_flat)
+
+
 def create_cifar_sgd_optimizer(
-    learning_rate: float = 0.2,
-    warmup_epochs: int = 5,
-    total_epochs: int = 200,
-    steps_per_epoch: int = 1000,
-    momentum: float = 0.9,
-    weight_decay: float = 2e-4,
+    learning_rate: float,
+    warmup_epochs: int,
+    total_epochs: int,
+    steps_per_epoch: int,
+    momentum: float,
+    weight_decay: float,
 ):
     """
     Creates SGD optimizer with warmup + cosine annealing schedule.
@@ -73,10 +90,16 @@ def create_cifar_sgd_optimizer(
         end_lr=0.0,
     )
 
-    optimizer = optax.sgd(learning_rate=lr_schedule, momentum=momentum, nesterov=False)
-
-    if weight_decay > 0:
-        optimizer = optax.chain(optax.add_decayed_weights(weight_decay), optimizer)
+    optimizer = optax.chain(
+        optax.add_decayed_weights(
+            weight_decay=weight_decay, mask=_weight_decay_mask_fn
+        ),
+        optax.sgd(
+            learning_rate=lr_schedule,
+            momentum=momentum,
+            nesterov=False,
+        ),
+    )
 
     return optimizer
 
