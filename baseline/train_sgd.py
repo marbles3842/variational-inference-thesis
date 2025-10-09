@@ -7,34 +7,19 @@ import yaml
 from orbax.checkpoint import StandardCheckpointer
 
 from core.optimizer import create_cifar_sgd_optimizer
-from data_loaders.cifar10_dataloader import get_cifar10_train_val_loaders
+
+from data_loaders.cifar10 import (
+    get_cifar10_train_loader,
+    get_cifar10_val_loader,
+)
 from models import get_cifar10_model, get_supported_models_names
-from logger.metrics_logger import MetricsLogger
+from logger import MetricsLogger
 from trainer.train_state import create_train_state
-from trainer.metrics import compute_metrics, cross_entropy_loss
+from trainer.metrics import compute_metrics
+from trainer.train_step import train_step_sgd
 
 
 NUM_CLASSES = 10
-
-
-@jax.jit
-def train_step(state, batch):
-    def loss_fn(params):
-        variables = {"params": params, "batch_stats": state.batch_stats}
-        logits, new_model_state = state.apply_fn(
-            variables,
-            batch["image"],
-            mutable=["batch_stats"],
-        )
-        loss = cross_entropy_loss(logits=logits, labels=batch["label"])
-        return loss, new_model_state
-
-    (loss, new_model_state), grads = jax.value_and_grad(loss_fn, has_aux=True)(
-        state.params
-    )
-    new_state = state.apply_gradients(grads=grads)
-    new_state = new_state.replace(batch_stats=new_model_state["batch_stats"])
-    return new_state
 
 
 if __name__ == "__main__":
@@ -43,7 +28,6 @@ if __name__ == "__main__":
     parser.add_argument(
         "--seed", type=int, required=True, help="Seed for the initialization"
     )
-    parser.add_argument("--job-id", type=int, required=True, help="Job id")
     parser.add_argument(
         "--model-name",
         type=str,
@@ -61,13 +45,12 @@ if __name__ == "__main__":
 
     model = get_cifar10_model(model_name=args.model_name, num_classes=NUM_CLASSES)
 
-    print(model.tabulate(jax.random.PRNGKey(0), jnp.ones([1, 32, 32, 3])))
-
     init_rng = jax.random.key(args.seed)
 
-    train_ds, val_ds = get_cifar10_train_val_loaders(
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+
+    train_ds = get_cifar10_train_loader(
         train_batch_size=config["train_batch_size"],
-        val_batch_size=config["val_batch_size"],
         seed=args.seed,
         num_epochs=config["num_epochs"],
     )
@@ -96,9 +79,8 @@ if __name__ == "__main__":
 
     # init checkpointer
     checkpointer = StandardCheckpointer()
-    script_dir = os.path.dirname(os.path.abspath(__file__))
     checkpoint_dir = os.path.join(
-        script_dir, "..", "checkpoints", "sgd", str(args.job_id)
+        script_dir, "..", "checkpoints", "sgd", args.model_name, str(args.seed)
     )
 
     # training loop
@@ -108,16 +90,21 @@ if __name__ == "__main__":
 
             batch = jax.device_put(batch)
 
-            state = train_step(state, batch)
+            state = train_step_sgd(state, batch)
             state = compute_metrics(state=state, batch=batch)
 
             if (step + 1) % num_steps_per_epoch == 0:
+
                 for metric, value in state.metrics.compute().items():
                     logger.update("train", metric, value)
 
                 state = state.replace(metrics=state.metrics.empty())
 
                 val_state = state
+
+                val_ds = get_cifar10_val_loader(
+                    val_batch_size=config["val_batch_size"], seed=args.seed
+                )
 
                 for val_batch in val_ds:
                     val_batch = jax.device_put(val_batch)
