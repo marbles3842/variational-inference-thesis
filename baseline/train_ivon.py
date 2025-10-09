@@ -8,10 +8,7 @@ from jax import random
 
 
 from core.optimizer import create_cifar_ivon_optimizer
-from data_loaders.cifar10 import (
-    get_cifar10_train_loader,
-    get_cifar10_val_loader,
-)
+from data_loaders.cifar10 import get_cifar10_train_val_loaders
 from models import get_cifar10_model, get_supported_models_names
 from logger import MetricsLogger
 from trainer.train_state import create_train_state
@@ -48,8 +45,9 @@ if __name__ == "__main__":
 
     main_rng, model_rng = random.split(init_rng, num=2)
 
-    train_ds = get_cifar10_train_loader(
+    train_ds, val_ds = get_cifar10_train_val_loaders(
         train_batch_size=config["train_batch_size"],
+        val_batch_size=config["val_batch_size"],
         seed=args.seed,
         num_epochs=config["num_epochs"],
     )
@@ -105,10 +103,6 @@ if __name__ == "__main__":
                 state = state.replace(metrics=state.metrics.empty())
 
                 val_state = state
-
-                val_ds = get_cifar10_val_loader(
-                    val_batch_size=config["val_batch_size"], seed=args.seed
-                )
 
                 for val_batch in val_ds:
                     val_batch = jax.device_put(val_batch)
