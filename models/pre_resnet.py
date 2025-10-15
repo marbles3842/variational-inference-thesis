@@ -16,6 +16,7 @@ class BasicBlockPreResNet(nn.Module):
     norm: ModuleDef
     activation: Callable
     strides: tuple[int, int] = (1, 1)
+    use_bias: bool = False
 
     @nn.compact
     def __call__(self, x):
@@ -27,7 +28,7 @@ class BasicBlockPreResNet(nn.Module):
             features=self.filters,
             kernel_size=(3, 3),
             strides=self.strides,
-            use_bias=False,
+            use_bias=self.use_bias,
             padding="SAME",
         )(out)
 
@@ -37,7 +38,7 @@ class BasicBlockPreResNet(nn.Module):
             features=self.filters,
             kernel_size=(3, 3),
             strides=(1, 1),
-            use_bias=False,
+            use_bias=self.use_bias,
             padding="SAME",
         )(out)
 
@@ -46,7 +47,7 @@ class BasicBlockPreResNet(nn.Module):
                 features=self.filters,
                 kernel_size=(1, 1),
                 strides=self.strides,
-                use_bias=False,
+                use_bias=self.use_bias,
                 padding="SAME",
                 name="conv_proj",
             )(residual)
@@ -61,6 +62,7 @@ class PreResNet(nn.Module):
     num_filters: int
     activation: Callable = nn.relu
     dtype: Any = jnp.float32
+    use_bias: bool = False
 
     @nn.compact
     def __call__(self, x):
@@ -72,7 +74,7 @@ class PreResNet(nn.Module):
             kernel_size=(3, 3),
             strides=(1, 1),
             padding="SAME",
-            use_bias=False,
+            use_bias=self.use_bias,
         )(x)
         x = norm()(x)
         x = self.activation(x)
@@ -85,6 +87,7 @@ class PreResNet(nn.Module):
                     strides=strides,
                     norm=norm,
                     activation=self.activation,
+                    use_bias=self.use_bias,
                 )(x)
 
         x = norm()(x)
@@ -97,5 +100,9 @@ class PreResNet(nn.Module):
 
 
 PreResNet110 = partial(
-    PreResNet, stage_sizes=(18, 18, 18), block=BasicBlockPreResNet, num_filters=24
+    PreResNet,
+    stage_sizes=(18, 18, 18),
+    block=BasicBlockPreResNet,
+    num_filters=24,
+    use_bias=True,
 )
