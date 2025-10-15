@@ -75,7 +75,21 @@ class TestResultsLogger:
             seed (int): The seed number.
             metrics (Dict[str, Any]): Dictionary of metric names and values.
         """
-        msg = f"Seed {seed} metrics: {metrics}\n"
+        formatted_metrics = {}
+        for key, value in metrics.items():
+            if hasattr(value, "item"):
+                value = value.item()
+            elif hasattr(value, "__array__"):
+                value = float(value)
+
+            if key == "accuracy":
+                formatted_metrics[key] = f"{value * 100:.2f}%"
+            else:
+                formatted_metrics[key] = f"{value:.4f}"
+
+        metrics_str = ", ".join([f"{k}: {v}" for k, v in formatted_metrics.items()])
+        msg = f"Seed {seed} metrics: {metrics_str}\n"
+
         print(msg.strip())
         self._file.write(msg)
         self._file.flush()
@@ -102,7 +116,12 @@ class TestResultsLogger:
         for metric_name, stats in aggregate_stats.items():
             mean = stats["mean"]
             std = stats["std"]
-            msg = f"{metric_name}: {mean:.4f} ± {std:.4f}\n"
+
+            if metric_name == "accuracy":
+                msg = f"{metric_name}: {mean * 100:.2f}% ± {std * 100:.2f}%\n"
+            else:
+                msg = f"{metric_name}: {mean:.4f} ± {std:.4f}\n"
+
             print(msg.strip())
             self._file.write(msg)
 
