@@ -3,66 +3,19 @@ import os
 import jax
 import jax.numpy as jnp
 import yaml
-import optax
 from orbax.checkpoint import StandardCheckpointer
-from jax import lax, random
-from jax.tree_util import tree_map
+from jax import random
 
 
 from core.optimizer import create_cifar_ivon_optimizer
-from core.ivon import sample_parameters
-from data_loaders.cifar10_dataloader import get_cifar10_train_val_loaders
+from data_loaders.cifar10 import get_cifar10_train_val_loaders
 from models import get_cifar10_model, get_supported_models_names
-from logger.metrics_logger import MetricsLogger
+from logger import MetricsLogger
 from trainer.train_state import create_train_state
-from trainer.metrics import compute_metrics, cross_entropy_loss
+from trainer.metrics import compute_metrics
+from trainer.train_step import train_step_ivon
 
 NUM_CLASSES = 10
-
-
-@jax.jit
-def train_step_ivon(state, batch, rng_key, train_mcsamples=1):
-    def loss_and_batch_stats(params, batch_stats):
-        variables = {"params": params, "batch_stats": batch_stats}
-        logits, mutated = state.apply_fn(
-            variables,
-            batch["image"],
-            train=True,
-            mutable=["batch_stats"],
-        )
-        loss = cross_entropy_loss(logits=logits, labels=batch["label"])
-        return loss, mutated["batch_stats"]
-
-    keys = random.split(rng_key, train_mcsamples)
-
-    grad_sum = tree_map(jnp.zeros_like, state.params)
-
-    def mc_sampling_step(carry, key):
-        params, opt_state, batch_stats, grad_sum = carry
-        sample_params, opt_state = sample_parameters(key, params, opt_state)
-        (loss, new_batch_stats), grads = jax.value_and_grad(
-            loss_and_batch_stats, has_aux=True
-        )(sample_params, batch_stats)
-        grad_sum = tree_map(lambda a, b: a + b, grad_sum, grads)
-        return (params, opt_state, new_batch_stats, grad_sum), loss
-
-    # init run
-    (params, opt_state, batch_stats, grad_sum), _ = mc_sampling_step(
-        (state.params, state.opt_state, state.batch_stats, grad_sum), keys[0]
-    )
-
-    (params, opt_state, final_batch_stats, grad_sum), _ = lax.scan(
-        mc_sampling_step, (params, opt_state, batch_stats, grad_sum), keys[1:]
-    )
-
-    updates, new_opt_state = state.tx.update(grad_sum, opt_state, params)
-    new_params = optax.apply_updates(params, updates)
-
-    return state.replace(
-        params=new_params,
-        opt_state=new_opt_state,
-        batch_stats=final_batch_stats,
-    )
 
 
 if __name__ == "__main__":
@@ -71,7 +24,6 @@ if __name__ == "__main__":
     parser.add_argument(
         "--seed", type=int, required=True, help="Seed for the initialization"
     )
-    parser.add_argument("--job-id", type=int, required=True, help="Job id")
     parser.add_argument(
         "--model-name",
         type=str,
@@ -129,7 +81,7 @@ if __name__ == "__main__":
     checkpointer = StandardCheckpointer()
     script_dir = os.path.dirname(os.path.abspath(__file__))
     checkpoint_dir = os.path.join(
-        script_dir, "..", "checkpoints", "ivon", str(args.job_id)
+        script_dir, "..", "checkpoints", "ivon", args.model_name, str(args.seed)
     )
 
     # training loop
