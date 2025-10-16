@@ -1,11 +1,11 @@
-from .resnet import ResNet20
+from .resnet import ResNet20, ResNet18
 from .pre_resnet import PreResNet110
 
 
 def get_supported_models_names():
     """Returns the list of names of supported models"""
 
-    return ["resnet20", "preresnet110"]
+    return ["resnet20", "resnet18", "preresnet110"]
 
 
 def get_cifar10_model(model_name, num_classes):
@@ -13,6 +13,7 @@ def get_cifar10_model(model_name, num_classes):
 
     models = {
         "resnet20": lambda: ResNet20(num_classes=num_classes),
+        "resnet18": lambda: ResNet18(num_classes=num_classes),
         "preresnet110": lambda: PreResNet110(num_classes=num_classes),
     }
 

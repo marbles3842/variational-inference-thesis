@@ -118,3 +118,12 @@ ResNet20 = partial(
     use_bias=True,
     activation=identity,
 )
+
+ResNet18 = partial(
+    ResNet,
+    stage_sizes=(2, 2, 2, 2),
+    block=BasicBlock,
+    num_filters=64,
+    use_bias=True,
+    activation=identity,
+)
