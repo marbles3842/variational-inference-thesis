@@ -8,15 +8,12 @@ from orbax.checkpoint import StandardCheckpointer
 
 from core.optimizer import create_cifar_sgd_optimizer
 
-from data_loaders.cifar10 import get_cifar10_train_val_loaders
+from data_loaders.cifar10 import get_cifar10_train_val_loaders, CIFAR10Info
 from models import get_cifar10_model, get_supported_models_names
 from logger import MetricsLogger
 from trainer.train_state import create_train_state
 from trainer.metrics import compute_metrics
 from trainer.train_step import train_step_sgd
-
-
-NUM_CLASSES = 10
 
 
 if __name__ == "__main__":
@@ -32,6 +29,11 @@ if __name__ == "__main__":
         help="Model to train",
         choices=get_supported_models_names(),
     )
+
+    parser.add_argument(
+        "--val-split", type=float, required=False, help="Validation split", default=0.0
+    )
+
     args = parser.parse_args()
 
     config_path = os.path.join(os.path.dirname(__file__), "train_cifar10_config.yaml")
@@ -40,7 +42,9 @@ if __name__ == "__main__":
         config = yaml.safe_load(file)
         config = config["cifar10"]["sgd"]
 
-    model = get_cifar10_model(model_name=args.model_name, num_classes=NUM_CLASSES)
+    model = get_cifar10_model(
+        model_name=args.model_name, num_classes=CIFAR10Info.num_classes
+    )
 
     init_rng = jax.random.key(args.seed)
 
@@ -51,11 +55,10 @@ if __name__ == "__main__":
         val_batch_size=config["val_batch_size"],
         seed=args.seed,
         num_epochs=config["num_epochs"],
+        val_split=args.val_split,
     )
 
-    num_steps_per_epoch = jnp.ceil(
-        train_ds._data_source.__len__() / config["train_batch_size"]
-    ).astype(jnp.int32)
+    num_steps_per_epoch = len(train_ds._data_source) // config["train_batch_size"]
 
     optimizer = create_cifar_sgd_optimizer(
         learning_rate=config["learning_rate"],
@@ -67,7 +70,7 @@ if __name__ == "__main__":
     )
 
     state = create_train_state(
-        model=model, rng=init_rng, x0=jnp.ones([1, 32, 32, 3]), optimizer=optimizer
+        model=model, rng=init_rng, x0=jnp.ones(CIFAR10Info.shape), optimizer=optimizer
     )
 
     logdir = img_dir = os.path.join(os.path.dirname(__file__), "..", "out", "sgd")
@@ -98,14 +101,15 @@ if __name__ == "__main__":
 
                 state = state.replace(metrics=state.metrics.empty())
 
-                val_state = state
+                if val_ds is not None:
+                    val_state = state
 
-                for val_batch in val_ds:
-                    val_batch = jax.device_put(val_batch)
-                    val_state = compute_metrics(state=val_state, batch=val_batch)
+                    for val_batch in val_ds:
+                        val_batch = jax.device_put(val_batch)
+                        val_state = compute_metrics(state=val_state, batch=val_batch)
 
-                for metric, value in val_state.metrics.compute().items():
-                    logger.update("val", metric, value)
+                    for metric, value in val_state.metrics.compute().items():
+                        logger.update("val", metric, value)
 
                 logger.end_epoch()
 
