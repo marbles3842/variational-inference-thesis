@@ -2,7 +2,6 @@
 
 The main focus of this thesis is variational inference for Bayesian neural networks. Bayesian methods naturally allow to quantify the uncertainty, but usually they are difficult to implement efficiently especially for larger datasets or complex models.
 
-
 [![Python](https://img.shields.io/badge/python-3.12.11-blue.svg)](https://docs.python.org/3.12/)
 [![JAX](https://img.shields.io/badge/JAX-CUDA12-orange.svg)](https://jax.readthedocs.io/)
 [![Flax](https://img.shields.io/badge/Flax-Neural%20Networks-green.svg)](https://flax-linen.readthedocs.io/en/latest/)
@@ -46,6 +45,8 @@ The following models are used for baseline reproduction on CIFAR-10:
 - **[ResNet](models/resnet.py)** - Residual Networks with variants ResNet18 and ResNet20. Based on [Deep Residual Learning for Image Recognition](https://arxiv.org/abs/1512.03385) (He et al., 2015).
 
 - **[PreResNet](models/pre_resnet.py)** - Pre-activation ResNet with PreResNet110 variant. Based on [Identity Mappings in Deep Residual Networks](https://arxiv.org/abs/1603.05027) (He et al., 2016).
+
+- **[DenseNet](models/densenet.py)** - Densely Connected Convolutional Networks with DenseNet121 variant. Based on [Densely Connected Convolutional Networks](https://arxiv.org/abs/1608.06993) (Huang et al., 2017).
 
 - **[Filter Response Normalization](models/filter_response_norm.py)** - Normalization layer used in the baseline models. Based on [Filter Response Normalization Layer: Eliminating Batch Dependence in the Training of Deep Neural Networks](https://arxiv.org/abs/1911.09737) (Singh & Krishnan, 2020).
 
