@@ -41,7 +41,7 @@ if __name__ == "__main__":
         type=str,
         required=True,
         help="Optimizer to evaluate",
-        choices=("sgd", "ivon-mean"),
+        choices=("sgd", "ivon-mean", "adamw"),
     )
     parser.add_argument(
         "--checkpoints-dir",
