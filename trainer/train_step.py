@@ -6,7 +6,11 @@ from .metrics import cross_entropy_loss
 
 
 @jax.jit
-def train_step_sgd(state, batch):
+def train_step(state, batch):
+    """
+    Train step that can be used for AdamW or SGD
+    """
+
     def loss_fn(params):
         variables = {"params": params}
         logits = state.apply_fn(variables, batch["image"])
@@ -20,6 +24,10 @@ def train_step_sgd(state, batch):
 
 @jax.jit
 def train_step_ivon(state, batch, rng_key, train_mcsamples=1):
+    """
+    Train step that must be used with IVON
+    """
+
     def loss_fn(params):
         variables = {"params": params}
         logits = state.apply_fn(variables, batch["image"])

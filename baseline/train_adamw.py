@@ -6,7 +6,7 @@ import yaml
 
 from orbax.checkpoint import StandardCheckpointer
 
-from core.optimizer import create_cifar_sgd_optimizer
+from core.optimizer import create_cifar_adamw_optimizer
 
 from data_loaders.cifar10 import get_cifar10_train_val_loaders, CIFAR10Info
 from models import get_cifar10_model, get_supported_models_names
@@ -40,7 +40,7 @@ if __name__ == "__main__":
 
     with open(config_path, "r") as file:
         config = yaml.safe_load(file)
-        config = config["cifar10"]["sgd"]
+        config = config["cifar10"]["adamw"]
 
     model = get_cifar10_model(
         model_name=args.model_name, num_classes=CIFAR10Info.num_classes
@@ -60,12 +60,11 @@ if __name__ == "__main__":
 
     num_steps_per_epoch = len(train_ds._data_source) // config["train_batch_size"]
 
-    optimizer = create_cifar_sgd_optimizer(
+    optimizer = create_cifar_adamw_optimizer(
         learning_rate=config["learning_rate"],
         warmup_epochs=config["warmup_epochs"],
         total_epochs=config["num_epochs"],
         steps_per_epoch=num_steps_per_epoch,
-        momentum=config["momentum"],
         weight_decay=config["weight_decay"],
     )
 
@@ -73,15 +72,15 @@ if __name__ == "__main__":
         model=model, rng=init_rng, x0=jnp.ones(CIFAR10Info.shape), optimizer=optimizer
     )
 
-    logdir = img_dir = os.path.join(os.path.dirname(__file__), "..", "out", "sgd")
+    logdir = img_dir = os.path.join(os.path.dirname(__file__), "..", "out", "adamw")
     metrics_log_path = os.path.join(
-        logdir, f"train-metrics-sgd-{args.model_name}-{args.seed}.csv"
+        logdir, f"train-metrics-adamw-{args.model_name}-{args.seed}.csv"
     )
 
     # init checkpointer
     checkpointer = StandardCheckpointer()
     checkpoint_dir = os.path.join(
-        script_dir, "..", "checkpoints", "sgd", args.model_name, str(args.seed)
+        script_dir, "..", "checkpoints", "adamw", args.model_name, str(args.seed)
     )
 
     # training loop

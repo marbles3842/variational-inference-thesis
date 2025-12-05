@@ -18,9 +18,10 @@ The main focus of this thesis is variational inference for Bayesian neural netwo
 - [Running Baseline Experiments](#running-baseline-experiments)
   - [Training](#training)
     - [Training with SGD](#training-with-sgd)
+    - [Training with AdamW](#training-with-adamw)
     - [Training with IVON](#training-with-ivon)
   - [Testing](#testing)
-    - [Testing SGD or IVON@mean](#testing-sgd-or-ivonmean)
+    - [Testing SGD, AdamW, or IVON@mean](#testing-sgd-adamw-or-ivonmean)
     - [Testing IVON with Sampling](#testing-ivon-with-sampling)
 
 ## Project Structure
@@ -69,6 +70,15 @@ python -m baseline.train_sgd --seed 0 --model-name resnet18
 python -m baseline.train_sgd --seed 1 --model-name preresnet110 --val-split 0.1
 ```
 
+#### Training with AdamW
+
+Use [baseline/train_adamw.py](baseline/train_adamw.py) to train models with the AdamW optimizer:
+
+```bash
+python -m baseline.train_adamw --seed 0 --model-name resnet18
+python -m baseline.train_adamw --seed 1 --model-name preresnet110 --val-split 0.1
+```
+
 #### Training with IVON
 
 Use [baseline/train_ivon.py](baseline/train_ivon.py) to train models with the IVON optimizer:
@@ -95,15 +105,20 @@ python -m baseline.train_ivon \
 
 Testing scripts will generate a report with results averaged over 5 random seeds.
 
-#### Testing SGD or IVON@mean
+#### Testing SGD, AdamW, or IVON@mean
 
-Use [baseline/test.py](baseline/test.py) to evaluate models trained with SGD or IVON (using mean parameters):
+Use [baseline/test.py](baseline/test.py) to evaluate models trained with SGD, AdamW, or IVON (using mean parameters):
 
 ```bash
 python -m baseline.test \
   --model-name resnet18 \
   --optimizer sgd \
   --checkpoints-dir checkpoints/sgd/resnet18
+
+python -m baseline.test \
+  --model-name resnet18 \
+  --optimizer adamw \
+  --checkpoints-dir checkpoints/adamw/resnet18
 
 python -m baseline.test \
   --model-name resnet18 \

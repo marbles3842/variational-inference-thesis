@@ -104,6 +104,42 @@ def create_cifar_sgd_optimizer(
     return optimizer
 
 
+def create_cifar_adamw_optimizer(
+    learning_rate: float,
+    warmup_epochs: int,
+    total_epochs: int,
+    steps_per_epoch: int,
+    weight_decay: float,
+    beta1: float = 0.9,
+    beta2: float = 0.999,
+):
+    """
+    Creates AdamW optimizer with warmup + cosine annealing schedule.
+
+    Args:
+        params: Model parameters
+        learning_rate: Peak learning rate
+        warmup_epochs: Warmup period
+        total_epochs: Total training epochs
+        steps_per_epoch: Steps per epoch (dataset_size // batch_size)
+        weight_decay: L2 regularization strength,
+        beta1: Exponential decay rate for first moment estimates (default: 0.9)
+        beta2: Exponential decay rate for second moment estimates (default: 0.999)
+    """
+
+    lr_schedule = create_warmup_cosine_schedule(
+        init_lr=learning_rate,
+        warmup_epochs=warmup_epochs,
+        total_epochs=total_epochs,
+        steps_per_epoch=steps_per_epoch,
+        end_lr=0.0,
+    )
+
+    return optax.adamw(
+        learning_rate=lr_schedule, b1=beta1, b2=beta2, weight_decay=weight_decay
+    )
+
+
 def create_cifar_ivon_optimizer(
     learning_rate: float,
     warmup_epochs: int,
