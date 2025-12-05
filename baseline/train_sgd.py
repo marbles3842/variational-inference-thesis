@@ -13,7 +13,7 @@ from models import get_cifar10_model, get_supported_models_names
 from logger import MetricsLogger
 from trainer.train_state import create_train_state
 from trainer.metrics import compute_metrics
-from trainer.train_step import train_step_sgd
+from trainer.train_step import train_step
 
 
 if __name__ == "__main__":
@@ -91,7 +91,7 @@ if __name__ == "__main__":
 
             batch = jax.device_put(batch)
 
-            state = train_step_sgd(state, batch)
+            state = train_step(state, batch)
             state = compute_metrics(state=state, batch=batch)
 
             if (step + 1) % num_steps_per_epoch == 0:
