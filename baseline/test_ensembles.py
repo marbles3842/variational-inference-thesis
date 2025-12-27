@@ -99,6 +99,22 @@ if __name__ == "__main__":
         default=5,
         help="Number of models in the ensemble",
     )
+
+    parser.add_argument(
+        "--ensemble-opt",
+        type=str,
+        required=True,
+        help="Optimizer to evaluate",
+        choices=("deep-ensembles-sgd", "multi-ivon"),
+    )
+
+    parser.add_argument(
+        "--logdir",
+        type=str,
+        required=True,
+        help="Path to the directory for metrics logger output",
+    )
+
     args = parser.parse_args()
 
     config_path = os.path.join(os.path.dirname(__file__), "train_cifar10_config.yaml")
@@ -130,11 +146,10 @@ if __name__ == "__main__":
     all_metrics = []
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    log_dir = os.path.join(script_dir, "..", "out", "sgd")
 
     model = get_cifar10_model(args.model_name, CIFAR10Info.num_classes)
 
-    with TestResultsLogger(log_dir, "deep ensembles", args.model_name) as logger:
+    with TestResultsLogger(args.logdir, args.ensemble_opt, args.model_name) as logger:
 
         for i, ensemble_seeds in enumerate(ensembles):
 
