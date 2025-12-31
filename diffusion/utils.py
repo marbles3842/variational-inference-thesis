@@ -1,0 +1,40 @@
+import os
+import math
+import yaml
+import matplotlib.pyplot as plt
+
+
+_DIFFUSION_TRAIN_CONFIG_FILE = "diffusion_train_config.yaml"
+
+
+def load_diffusion_ivon_config(filename: str = _DIFFUSION_TRAIN_CONFIG_FILE):
+    config_path = os.path.join(os.path.dirname(__file__), filename)
+
+    with open(config_path, "r") as file:
+        config = yaml.safe_load(file)
+        return config["ivon"]
+
+
+def save_samples(samples, filename: str):
+    n_samples = len(samples)
+
+    n_cols = math.ceil(math.sqrt(n_samples))
+    n_rows = math.ceil(n_samples / n_cols)
+
+    fig_size = (n_cols * 1.25, n_rows * 1.25)
+
+    _, axes = plt.subplots(n_rows, n_cols, figsize=fig_size)
+
+    if n_samples == 1:
+        axes = [axes]
+    else:
+        axes = axes.flatten()
+
+    for i, ax in enumerate(axes):
+        if i < n_samples:
+            ax.imshow(samples[i].squeeze(), cmap="gray")
+        ax.axis("off")
+
+    plt.tight_layout()
+    plt.savefig(filename)
+    plt.close()

@@ -1,5 +1,5 @@
 ivon:
-  learning_rate: 0.2
+  learning_rate: 0.3
   num_epochs: 500
   batch_size: 128
   weight_decay: 1.0e-5

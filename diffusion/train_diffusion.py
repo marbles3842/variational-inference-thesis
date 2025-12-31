@@ -42,7 +42,6 @@ def create_mgpu_diffusion_train_step(mesh):
 
     return jax.jit(
         diffusion_train_step_with_ivon,
-        static_argnames=["train_mcsamples"],
         in_shardings=(
             state_sharding,
             get_data_sharding(mesh),
@@ -116,15 +115,15 @@ if __name__ == "__main__":
     device_mesh = mesh_utils.create_device_mesh((len(devices),))
     mesh = Mesh(device_mesh, axis_names=("data",))
 
+    total_batch_size = len(devices) * ivon_config["batch_size"]
+
     images = get_mnist_dataset(
-        train_batch_size=len(devices) * ivon_config["batch_size"],
+        train_batch_size=total_batch_size,
         num_epochs=ivon_config["num_epochs"],
         seed=args.init_seed,
     )
 
-    print(
-        f"Total batch size across devices: {len(devices) * ivon_config['batch_size']}"
-    )
+    print(f"Total batch size across devices: {total_batch_size}")
 
     tx = ivon(
         learning_rate=ivon_config["learning_rate"],
@@ -161,7 +160,7 @@ if __name__ == "__main__":
 
     main_mc_rng = jr.key(args.train_mc_samples_seed)
 
-    num_steps_per_epoch = MNIST_LENGTH // ivon_config["batch_size"]
+    num_steps_per_epoch = MNIST_LENGTH // total_batch_size
 
     with MetricsLogger(args.logs) as logger:
 
@@ -174,8 +173,7 @@ if __name__ == "__main__":
                 batch,
                 diffusion_step_key,
                 diffusion,
-                step_mc_rng,
-                ivon_config["train_mc_samples"],
+                jr.split(step_mc_rng, num=ivon_config["train_mc_samples"]),
             )
 
             if (step + 1) % num_steps_per_epoch == 0:
