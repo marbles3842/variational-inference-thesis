@@ -2,8 +2,11 @@ import grain.python as grain
 from datasets import load_dataset
 import numpy as np
 
-MNIST_LENGTH = 60000
-MNIST_IMAGE_SHAPE = (32, 32, 1)  # additional padding is used
+
+class MNISTInfo:
+    train_length = 60000
+    test_length = 10000
+    shape = (32, 32, 1)
 
 
 class _Normalize(grain.MapTransform):

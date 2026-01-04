@@ -8,7 +8,7 @@ from jax.sharding import Mesh, PartitionSpec as P, NamedSharding
 from jax.experimental import mesh_utils
 from flax import serialization
 
-from data_loaders.mnist import get_mnist_dataset, MNIST_LENGTH, MNIST_IMAGE_SHAPE
+from data_loaders.mnist import get_mnist_dataset, MNISTInfo
 from trainer.diffusion import (
     diffusion_train_step_with_ivon,
     diffusion_sample,
@@ -141,7 +141,7 @@ if __name__ == "__main__":
     state = create_train_state(
         model,
         jr.key(args.init_seed),
-        jnp.zeros((1,) + MNIST_IMAGE_SHAPE),
+        jnp.zeros((1, *MNISTInfo.shape)),
         jnp.zeros((1,)),
         tx,
     )
@@ -160,7 +160,7 @@ if __name__ == "__main__":
 
     main_mc_rng = jr.key(args.train_mc_samples_seed)
 
-    num_steps_per_epoch = MNIST_LENGTH // total_batch_size
+    num_steps_per_epoch = MNISTInfo.train_length // total_batch_size
 
     with MetricsLogger(args.logs) as logger:
 
@@ -208,7 +208,7 @@ if __name__ == "__main__":
         samples = diffusion_sample(
             model=model,
             variables={"params": params},
-            shape=(num_samples,) + MNIST_IMAGE_SHAPE,
+            shape=(num_samples, *MNISTInfo.shape),
             key=key,
             schedule=diffusion,
         )
