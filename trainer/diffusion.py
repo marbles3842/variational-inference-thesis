@@ -1,5 +1,4 @@
-from typing import Tuple
-from functools import partial
+from typing import Tuple, Callable
 
 import optax
 import jax
@@ -40,43 +39,10 @@ class DiffusionModelSchedule:
         )
 
 
-@jax.jit
-def diffusion_train_step(
-    state: TrainState,
-    batch: jax.Array,
-    key: jr.PRNGKey,
-    schedule: DiffusionModelSchedule,
-):
-    key_t, key_esp, key = jr.split(key, num=3)
-
-    def negative_elbo(params):
-        batch_size = batch.shape[0]
-        t = jr.randint(
-            key=key_t, minval=0, maxval=schedule.timesteps, shape=(batch_size,)
-        )
-        epsilon = jr.normal(key_esp, shape=batch.shape)
-        alpha_bar_t = schedule.alpha_cumprod[t].reshape(batch_size, 1, 1, 1)
-        x_t = jnp.sqrt(alpha_bar_t) * batch + jnp.sqrt(1 - alpha_bar_t) * epsilon
-        variables = {"params": params}
-        epsilon_theta = state.apply_fn(variables, x_t, t)
-        loss = (epsilon_theta - epsilon) ** 2
-
-        weight = (1 - schedule.alpha_cumprod[t]).reshape(batch_size, 1, 1, 1)
-        weighted_loss = weight * loss
-        neg_elbo = weighted_loss.mean()
-        return neg_elbo
-
-    loss, grads = jax.value_and_grad(negative_elbo)(state.params)
-    new_state = state.apply_gradients(grads=grads)
-    metric_update = new_state.metrics.single_from_model_output(loss=loss)
-    metrics = new_state.metrics.merge(metric_update)
-    return new_state.replace(metrics=metrics), key
-
-
-def negative_elbo(
+def _negative_elbo(
     batch: jax.Array,
     params: FrozenVariableDict,
-    state: TrainState,
+    apply_fn: Callable,
     schedule: DiffusionModelSchedule,
     key_t: jr.PRNGKey,
     key_eps: jr.PRNGKey,
@@ -87,7 +53,7 @@ def negative_elbo(
     alpha_bar_t = schedule.alpha_cumprod[t].reshape(batch_size, 1, 1, 1)
     x_t = jnp.sqrt(alpha_bar_t) * batch + jnp.sqrt(1 - alpha_bar_t) * epsilon
     variables = {"params": params}
-    epsilon_theta = state.apply_fn(variables, x_t, t)
+    epsilon_theta = apply_fn(variables, x_t, t)
     loss = (epsilon_theta - epsilon) ** 2
 
     weight = (1 - schedule.alpha_cumprod[t]).reshape(batch_size, 1, 1, 1)
@@ -97,52 +63,86 @@ def negative_elbo(
 
 
 @jax.jit
-def _compute_hessian_metrics(hessian):
-    all_hess_values = jnp.concatenate([jnp.ravel(h) for h in jax.tree.leaves(hessian)])
-    return jnp.mean(all_hess_values), jnp.min(all_hess_values)
-
-
-@partial(jax.jit, static_argnames=["train_mcsamples"])
-def diffusion_train_step_with_ivon(
+def diffusion_train_step(
     state: TrainState,
     batch: jax.Array,
-    train_key: jr.PRNGKey,
+    key: jr.PRNGKey,
     schedule: DiffusionModelSchedule,
-    mc_key: jr.PRNGKey,
-    train_mcsamples: int,
 ):
+    """
+    Base training step that can be used with Adam or SGD
+    Implements algorithm 1 from https://arxiv.org/pdf/2006.11239
+    """
+    key_t, key_eps, key = jr.split(key, num=3)
+
     def loss(params, key_t, key_eps):
-        return negative_elbo(
+        return _negative_elbo(
             batch=batch,
             params=params,
-            state=state,
+            apply_fn=state.apply_fn,
             schedule=schedule,
             key_t=key_t,
             key_eps=key_eps,
         )
 
-    mc_key, *mc_keys = jax.random.split(mc_key, train_mcsamples + 1)
-    opt_state = state.opt_state
+    loss, grads = jax.value_and_grad(loss)(state.params, key_t, key_eps)
+    new_state = state.apply_gradients(grads=grads)
+    metric_update = new_state.metrics.single_from_model_output(loss=loss)
+    metrics = new_state.metrics.merge(metric_update)
+    return new_state.replace(metrics=metrics), key
+
+
+@jax.jit
+def _compute_hessian_metrics(hessian):
+    all_hess_values = jnp.concatenate([jnp.ravel(h) for h in jax.tree.leaves(hessian)])
+    return jnp.mean(all_hess_values), jnp.min(all_hess_values)
+
+
+@jax.jit
+def diffusion_train_step_with_ivon(
+    state: TrainState,
+    batch: jax.Array,
+    train_key: jr.PRNGKey,
+    schedule: DiffusionModelSchedule,
+    mc_keys: jax.Array,
+):
+    """
+    Training step with MC sampling for IVON
+    Implements algorithm 1 from https://arxiv.org/pdf/2006.11239
+    """
+
+    def loss(params, key_t, key_eps):
+        return _negative_elbo(
+            batch=batch,
+            params=params,
+            apply_fn=state.apply_fn,
+            schedule=schedule,
+            key_t=key_t,
+            key_eps=key_eps,
+        )
+
     params = state.params
 
-    for i, key in enumerate(mc_keys):
+    def mc_step(opt_state, key):
         key_t, key_eps, key = jr.split(key, num=3)
         psample, opt_state = sample_parameters(key, params, opt_state)
-
         updates = jax.grad(loss)(psample, key_t, key_eps)
+        return accumulate_gradients(updates, opt_state), None
 
-        if i == train_mcsamples - 1:
-            updates, opt_state = state.tx.update(updates, opt_state, params)
-        else:
-            opt_state = accumulate_gradients(updates, opt_state)
+    opt_state, _ = scan(mc_step, state.opt_state, mc_keys[:-1])
+
+    key_t, key_eps, key = jr.split(mc_keys[-1], num=3)
+    psample, opt_state = sample_parameters(key, params, opt_state)
+    updates = jax.grad(loss)(psample, key_t, key_eps)
+    updates, opt_state = state.tx.update(updates, opt_state, params)
 
     new_params = optax.apply_updates(params, updates)
     new_state = state.replace(params=new_params, opt_state=opt_state)
     key_t, key_eps, train_key = jr.split(train_key, num=3)
-    loss = negative_elbo(
+    loss = _negative_elbo(
         batch=batch,
         params=new_params,
-        state=new_state,
+        apply_fn=new_state.apply_fn,
         schedule=schedule,
         key_t=key_t,
         key_eps=key_eps,
@@ -162,6 +162,10 @@ def diffusion_sample(
     key: jr.PRNGKey,
     schedule: DiffusionModelSchedule,
 ):
+    """
+    Sampling from a diffusion model
+    Implements algorithm 2 from https://arxiv.org/pdf/2006.11239
+    """
     batch_size = shape[0]
 
     key, subkey = jr.split(key)
