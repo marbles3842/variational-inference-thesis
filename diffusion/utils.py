@@ -1,7 +1,9 @@
 import os
 import math
 import yaml
+import jax
 import matplotlib.pyplot as plt
+from typing import Optional
 
 
 _DIFFUSION_TRAIN_CONFIG_FILE = "diffusion_train_config.yaml"
@@ -15,7 +17,7 @@ def load_diffusion_ivon_config(filename: str = _DIFFUSION_TRAIN_CONFIG_FILE):
         return config["ivon"]
 
 
-def save_samples(samples, filename: str):
+def save_samples(samples, filename: str, entropy: Optional[jax.Array] = None):
     n_samples = len(samples)
 
     n_cols = math.ceil(math.sqrt(n_samples))
@@ -33,6 +35,8 @@ def save_samples(samples, filename: str):
     for i, ax in enumerate(axes):
         if i < n_samples:
             ax.imshow(samples[i].squeeze(), cmap="gray")
+            if entropy is not None:
+                ax.set_title(f"H={entropy[i]:.3f}", fontsize=8)
         ax.axis("off")
 
     plt.tight_layout()
