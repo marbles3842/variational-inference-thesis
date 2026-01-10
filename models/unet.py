@@ -9,6 +9,7 @@ from functools import partial
 import jax
 import jax.numpy as jnp
 import flax.linen as nn
+from flax.typing import Dtype
 import chex
 
 
@@ -16,11 +17,17 @@ class UpSample(nn.Module):
     features: int
     kernel_size: Tuple | int
     strides: Tuple | int = (2, 2)
+    dtype: Dtype = jnp.float32
+    param_dtype: Dtype = jnp.float32
 
     @nn.compact
     def __call__(self, x: jax.Array):
         return nn.ConvTranspose(
-            features=self.features, kernel_size=self.kernel_size, strides=self.strides
+            features=self.features,
+            kernel_size=self.kernel_size,
+            strides=self.strides,
+            dtype=self.dtype,
+            param_dtype=self.dtype,
         )(x)
 
 
@@ -28,11 +35,17 @@ class DownSample(nn.Module):
     features: int
     kernel_size: Tuple | int
     strides: Tuple | int = (2, 2)
+    dtype: Dtype = jnp.float32
+    param_dtype: Dtype = jnp.float32
 
     @nn.compact
     def __call__(self, x: jax.Array):
         return nn.Conv(
-            features=self.features, kernel_size=self.kernel_size, strides=self.strides
+            features=self.features,
+            kernel_size=self.kernel_size,
+            strides=self.strides,
+            dtype=self.dtype,
+            param_dtype=self.dtype,
         )(x)
 
 
@@ -52,15 +65,25 @@ class SinusoidalPositionEmbedding(nn.Module):
 class TimeEmbedding(nn.Module):
     features: int
     sin_embedding_features: int
+    dtype: Dtype = jnp.float32
+    param_dtype: Dtype = jnp.float32
 
     @nn.compact
     def __call__(self, time: jax.Array):
         return nn.Sequential(
             [
                 SinusoidalPositionEmbedding(features=self.sin_embedding_features),
-                nn.Dense(features=self.features),
+                nn.Dense(
+                    features=self.features,
+                    dtype=self.dtype,
+                    param_dtype=self.param_dtype,
+                ),
                 nn.gelu,
-                nn.Dense(features=self.features),
+                nn.Dense(
+                    features=self.features,
+                    dtype=self.dtype,
+                    param_dtype=self.param_dtype,
+                ),
             ]
         )(time)
 
@@ -69,13 +92,20 @@ class Block(nn.Module):
     features: int
     kernel_size: Tuple | int
     groups: int
+    dtype: Dtype = jnp.float32
+    param_dtype: Dtype = jnp.float32
 
     @nn.compact
     def __call__(self, x: jax.Array, scale_shift: Tuple = None):
         out = nn.Sequential(
             [
-                nn.Conv(features=self.features, kernel_size=self.kernel_size),
-                nn.GroupNorm(num_groups=self.groups),
+                nn.Conv(
+                    features=self.features,
+                    kernel_size=self.kernel_size,
+                    dtype=self.dtype,
+                    param_dtype=self.param_dtype,
+                ),
+                nn.GroupNorm(num_groups=self.groups, dtype=self.dtype),
             ]
         )(x)
 
@@ -90,6 +120,8 @@ class ResnetBlock(nn.Module):
     features: int
     kernel_size: Tuple | int
     groups: int
+    dtype: Dtype = jnp.float32
+    param_dtype: Dtype = jnp.float32
 
     @nn.compact
     def __call__(self, x: jax.Array, time_emb: jax.Array = None):
@@ -98,9 +130,18 @@ class ResnetBlock(nn.Module):
             features=self.features,
             kernel_size=self.kernel_size,
             groups=self.groups,
+            dtype=self.dtype,
+            param_dtype=self.param_dtype,
         )
 
-        mlp = nn.Sequential([nn.silu, nn.DenseGeneral(self.features * 2)])
+        mlp = nn.Sequential(
+            [
+                nn.silu,
+                nn.DenseGeneral(
+                    self.features * 2, dtype=self.dtype, param_dtype=self.param_dtype
+                ),
+            ]
+        )
 
         scale_shift = None
         if time_emb is not None:
@@ -123,15 +164,19 @@ class Attention(nn.Module):
     features: int
     heads: int
     groups: int
+    dtype: Dtype = jnp.float32
+    param_dtype: Dtype = jnp.float32
 
     @nn.compact
     def __call__(self, x: jax.Array):
         b, w, h, d = x.shape
         out = nn.Sequential(
             [
-                nn.GroupNorm(self.groups),
+                nn.GroupNorm(self.groups, dtype=self.dtype),
                 lambda i: jnp.reshape(i, (b, w * h, d)),
-                nn.SelfAttention(num_heads=self.heads),
+                nn.SelfAttention(
+                    num_heads=self.heads, dtype=self.dtype, param_dtype=self.param_dtype
+                ),
                 lambda i: jnp.reshape(i, (b, w, h, self.features)),
             ]
         )(x)
@@ -151,22 +196,40 @@ class Unet(nn.Module):
     time_embed_features: int
 
     num_groups: int
+    dtype: Dtype = jnp.float32
+    param_dtype: Dtype = jnp.float32
 
     @nn.compact
     def __call__(self, x: jax.Array, time: jax.Array):
         time = time[:, None]
 
         res_block = partial(
-            ResnetBlock, kernel_size=self.kernel_size, groups=self.num_groups
+            ResnetBlock,
+            kernel_size=self.kernel_size,
+            groups=self.num_groups,
+            dtype=self.dtype,
+            param_dtype=self.param_dtype,
         )
         attention = partial(
-            Attention, heads=self.attention_num_heads, groups=self.num_groups
+            Attention,
+            heads=self.attention_num_heads,
+            groups=self.num_groups,
+            dtype=self.dtype,
+            param_dtype=self.param_dtype,
         )
 
-        t = TimeEmbedding(self.time_embed_features, self.sinusoidal_embed_features)(
-            time
-        )
-        out = nn.Conv(self.features, self.kernel_size)(x)
+        t = TimeEmbedding(
+            self.time_embed_features,
+            self.sinusoidal_embed_features,
+            dtype=self.dtype,
+            param_dtype=self.param_dtype,
+        )(time)
+        out = nn.Conv(
+            self.features,
+            self.kernel_size,
+            dtype=self.dtype,
+            param_dtype=self.param_dtype,
+        )(x)
 
         h = [out]
         for i, feature_mult in enumerate(self.feature_mults):
@@ -180,7 +243,12 @@ class Unet(nn.Module):
                 h.append(out)
 
             if i < len(self.feature_mults) - 1:
-                out = DownSample(block_features, self.kernel_size)(out)
+                out = DownSample(
+                    block_features,
+                    self.kernel_size,
+                    dtype=self.dtype,
+                    param_dtype=self.param_dtype,
+                )(out)
                 h.append(out)
 
         mid_features = self.features * self.feature_mults[-1]
@@ -198,10 +266,20 @@ class Unet(nn.Module):
                     out = attention(block_features)(out)
 
             if i < len(self.feature_mults) - 1:
-                out = UpSample(block_features, self.kernel_size)(out)
+                out = UpSample(
+                    block_features,
+                    self.kernel_size,
+                    dtype=self.dtype,
+                    param_dtype=self.param_dtype,
+                )(out)
 
         out = res_block(self.features)(out, time_emb=t)
-        return nn.Conv(x.shape[-1], kernel_size=(1, 1))(out)
+        return nn.Conv(
+            x.shape[-1],
+            kernel_size=(1, 1),
+            dtype=self.dtype,
+            param_dtype=self.param_dtype,
+        )(out)
 
 
 Unet_MNIST = partial(
@@ -215,4 +293,5 @@ Unet_MNIST = partial(
     time_embed_features=32,
     kernel_size=(3, 3),
     num_groups=4,
+    dtype=jnp.float32,
 )

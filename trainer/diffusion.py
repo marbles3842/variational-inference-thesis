@@ -8,15 +8,18 @@ from jax.lax import scan, cond
 import flax.linen as nn
 from flax.struct import dataclass, field
 from flax.training.train_state import TrainState
-from flax.typing import FrozenVariableDict
+from flax.typing import FrozenVariableDict, Dtype
 
 from core.ivon import sample_parameters, accumulate_gradients
 
 
 def _linear_beta_schedule(
-    timesteps: int, beta_start: float = 1e-4, beta_end: float = 2e-2
+    timesteps: int,
+    beta_start: float = 1e-4,
+    beta_end: float = 2e-2,
+    dtype: Dtype = jnp.float32,
 ):
-    return jnp.linspace(beta_start, beta_end, timesteps)
+    return jnp.linspace(beta_start, beta_end, timesteps, dtype=dtype)
 
 
 @dataclass
@@ -27,8 +30,8 @@ class DiffusionModelSchedule:
     timesteps: int = field(pytree_node=False)
 
     @classmethod
-    def create(cls, timesteps: int):
-        beta = _linear_beta_schedule(timesteps=timesteps)
+    def create(cls, timesteps: int, dtype: Dtype = jnp.float32):
+        beta = _linear_beta_schedule(timesteps=timesteps, dtype=dtype)
         alpha = 1 - beta
         alpha_cumprod = jnp.cumprod(alpha)
         return cls(
@@ -58,7 +61,7 @@ def _negative_elbo(
 
     weight = (1 - schedule.alpha_cumprod[t]).reshape(batch_size, 1, 1, 1)
     weighted_loss = weight * loss
-    neg_elbo = weighted_loss.mean()
+    neg_elbo = weighted_loss.astype(jnp.float32).mean()
     return neg_elbo
 
 
@@ -161,6 +164,7 @@ def diffusion_sample(
     shape: Tuple,
     key: jr.PRNGKey,
     schedule: DiffusionModelSchedule,
+    dtype: Dtype = jnp.float32,
 ):
     """
     Sampling from a diffusion model
@@ -169,11 +173,11 @@ def diffusion_sample(
     batch_size = shape[0]
 
     key, subkey = jr.split(key)
-    x_t = jr.normal(key=subkey, shape=shape)
+    x_t = jr.normal(key=subkey, shape=shape, dtype=dtype)
 
     def reverse_step(carry, t):
         x_t, key = carry
-        t_arr = jnp.full((batch_size,), t)
+        t_arr = jnp.full((batch_size,), t, dtype=dtype)
         key, subkey = jr.split(key)
         z = cond(
             t > 0,

@@ -29,17 +29,23 @@ class _Pad(grain.MapTransform):
 
 
 def get_mnist_dataset(
-    train_batch_size: int,
-    num_epochs: int,
-    seed: int,
-    train_worker_count: int = 4,
+    train_batch_size: int, num_epochs: int, seed: int, train_worker_count: int = 4
 ):
     ds = load_dataset("mnist")
     ds = ds.with_format("numpy")["train"]
 
+    try:
+        shard_options = grain.ShardByJaxProcess(drop_remainder=True)
+
+    except ImportError:
+        shard_options = grain.ShardOptions(
+            shard_count=0, shard_index=1, drop_remainder=True
+        )
+
     train_loader = grain.load(
         ds,
         num_epochs=num_epochs,
+        shard_options=shard_options,
         shuffle=True,
         seed=seed,
         drop_remainder=True,
