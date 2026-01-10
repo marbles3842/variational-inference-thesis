@@ -1,29 +1,25 @@
-import os
 import jax
 import jax.numpy as jnp
 import jax.random as jr
 
-from orbax.checkpoint import StandardCheckpointer
 from jax.sharding import Mesh, PartitionSpec as P, NamedSharding
 from jax.experimental import mesh_utils
-from flax import serialization
 
 from data_loaders.mnist import get_mnist_dataset, MNISTInfo
 from trainer.diffusion import (
     diffusion_train_step_with_ivon,
-    diffusion_sample,
     DiffusionModelSchedule,
 )
 from models.unet import Unet_MNIST
 from trainer.diffusion_train_state import create_train_state
 from logger import MetricsLogger
 
-from core.ivon import sample_parameters, ivon
+from core.ivon import ivon
+from core.serialization import save_params
 
-from .utils import save_samples, load_diffusion_ivon_config
+from .utils import load_diffusion_ivon_config
 
 
-# TODO: refactor and check if this is needed
 def get_sharding_for_leaf(leaf):
     if jnp.ndim(leaf) == 0:
         return NamedSharding(mesh, P())
@@ -50,6 +46,7 @@ def create_mgpu_diffusion_train_step(mesh):
             replicated_sharding,
         ),
         out_shardings=(state_sharding, replicated_sharding),
+        donate_argnums=(0,),
     )
 
 
@@ -57,12 +54,6 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--model",
-        type=str,
-        default="model.msgpack",
-        help="file to save model to or load model from (default: %(default)s)",
-    )
     parser.add_argument(
         "--init-seed",
         type=int,
@@ -115,7 +106,7 @@ if __name__ == "__main__":
     device_mesh = mesh_utils.create_device_mesh((len(devices),))
     mesh = Mesh(device_mesh, axis_names=("data",))
 
-    total_batch_size = len(devices) * ivon_config["batch_size"]
+    total_batch_size = jax.device_count() * ivon_config["batch_size"]
 
     images = get_mnist_dataset(
         train_batch_size=total_batch_size,
@@ -136,7 +127,7 @@ if __name__ == "__main__":
 
     print(f"Trained with parameters: {ivon_config}")
 
-    model = Unet_MNIST()
+    model = Unet_MNIST(dtype=jnp.bfloat16)
 
     state = create_train_state(
         model,
@@ -153,7 +144,7 @@ if __name__ == "__main__":
     diffusion_step_key = jr.key(args.diffusion_step_seed)
 
     diffusion = DiffusionModelSchedule.create(
-        timesteps=ivon_config["diffusion_timesteps"]
+        timesteps=ivon_config["diffusion_timesteps"], dtype=jnp.bfloat16
     )
 
     mgpu_diffusion_train_step = create_mgpu_diffusion_train_step(mesh)
@@ -165,6 +156,7 @@ if __name__ == "__main__":
     with MetricsLogger(args.logs) as logger:
 
         for step, batch in enumerate(images):
+            batch = batch.astype(jnp.bfloat16)
             batch = jax.device_put(batch, get_data_sharding(mesh))
 
             main_mc_rng, step_mc_rng = jr.split(main_mc_rng)
@@ -185,49 +177,5 @@ if __name__ == "__main__":
 
                 logger.end_epoch()
 
-    # init checkpointer
-    bytes_output = serialization.to_bytes(state.params)
-
-    with open(args.model, "wb") as f:
-        f.write(bytes_output)
-
-    checkpointer = StandardCheckpointer()
-    checkpoint_dir = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), "..", "checkpoints", "diffusion"
-    )
-    checkpointer.save(checkpoint_dir, state)
-    checkpointer.close()
-
-    posterior_params, new_state = sample_parameters(
-        rng=jr.key(args.samples_seed), params=state.params, states=state.opt_state
-    )
-
-    def generate_and_save_samples(
-        key: jr.PRNGKey, params, num_samples: int, filename: str
-    ):
-        samples = diffusion_sample(
-            model=model,
-            variables={"params": params},
-            shape=(num_samples, *MNISTInfo.shape),
-            key=key,
-            schedule=diffusion,
-        )
-        samples = jnp.clip(samples, -1, 1)
-        samples = (samples + 1) / 2
-        save_samples(samples=samples, filename=filename)
-
-    generate_and_save_samples(
-        key=jr.key(args.samples_seed),
-        num_samples=args.num_samples,
-        filename="ivon-mean-samples.png",
-        params=state.params,
-    )
-
-    generate_and_save_samples(
-        key=jr.key(args.samples_seed),
-        num_samples=args.num_samples,
-        filename="ivon-posterior-samples.png",
-        params=posterior_params,
-    )
-
-    print("Finished!")
+    save_params(f"ddpm-ivon-{args.init_seed}.msgpack", state.params)
+    save_params(f"ddpm-ivon-state-{args.init_seed}.msgpack", state.opt_state[0])
