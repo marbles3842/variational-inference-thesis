@@ -99,7 +99,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    ivon_config = load_diffusion_ivon_config()
+    ivon_config = load_diffusion_ivon_config(filename="config_debug.yaml")
 
     devices = jax.devices()
 
