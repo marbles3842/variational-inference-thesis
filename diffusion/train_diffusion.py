@@ -106,7 +106,10 @@ if __name__ == "__main__":
     device_mesh = mesh_utils.create_device_mesh((len(devices),))
     mesh = Mesh(device_mesh, axis_names=("data",))
 
-    total_batch_size = jax.device_count() * ivon_config["batch_size"]
+    total_batch_size = ivon_config["batch_size"]
+
+    num_devices = jax.device_count()
+    per_device_batch_size = total_batch_size // num_devices
 
     images = get_mnist_dataset(
         train_batch_size=total_batch_size,
@@ -115,6 +118,7 @@ if __name__ == "__main__":
     )
 
     print(f"Total batch size across devices: {total_batch_size}")
+    print(f"Per device batch size across devices: {per_device_batch_size}")
 
     tx = ivon(
         learning_rate=ivon_config["learning_rate"],
