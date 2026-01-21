@@ -1,16 +1,25 @@
-from typing import Tuple, Callable
+from typing import Tuple, Callable, Any
 
 import optax
 import jax
+import jmp
 import jax.numpy as jnp
 import jax.random as jr
 from jax.lax import scan, cond
 import flax.linen as nn
+from flax.core import FrozenDict
 from flax.struct import dataclass, field
 from flax.training.train_state import TrainState
-from flax.typing import FrozenVariableDict, Dtype
 
 from core.ivon import sample_parameters, accumulate_gradients
+
+
+Dtype = Any
+
+
+_policy = jmp.Policy(
+    param_dtype=jnp.float32, compute_dtype=jnp.bfloat16, output_dtype=jnp.float32
+)
 
 
 def _linear_beta_schedule(
@@ -22,6 +31,14 @@ def _linear_beta_schedule(
     return jnp.linspace(beta_start, beta_end, timesteps, dtype=dtype)
 
 
+def _cosine_beta_schedule(timesteps: int, s: float = 0.008, dtype: Dtype = jnp.float32):
+    t = jnp.linspace(0, timesteps, timesteps + 1)
+    f = lambda t: jnp.cos((t / timesteps + s) / (1 + s) * 0.5 * jnp.pi) ** 2
+    alpha_cumprod = f(t) / f(0)
+    betas = 1 - (alpha_cumprod[1:] / alpha_cumprod[:-1])
+    return jnp.clip(betas, 0.0001, 0.9999).astype(dtype)
+
+
 @dataclass
 class DiffusionModelSchedule:
     beta: jax.Array
@@ -30,9 +47,20 @@ class DiffusionModelSchedule:
     timesteps: int = field(pytree_node=False)
 
     @classmethod
-    def create(cls, timesteps: int, dtype: Dtype = jnp.float32):
-        beta = _linear_beta_schedule(timesteps=timesteps, dtype=dtype)
-        alpha = 1 - beta
+    def create(
+        cls, timesteps: int, schedule_type: str = "linear", dtype: Dtype = jnp.float32
+    ):
+        match schedule_type:
+            case "cosine":
+                beta = _cosine_beta_schedule(timesteps=timesteps, dtype=dtype)
+            case "linear":
+                beta = _linear_beta_schedule(timesteps=timesteps, dtype=dtype)
+            case _:
+                raise ValueError(
+                    f"Schedule type must be 'cosine' or 'linear', got '{schedule_type}'"
+                )
+
+        alpha = 1.0 - beta
         alpha_cumprod = jnp.cumprod(alpha)
         return cls(
             beta=beta,
@@ -42,27 +70,59 @@ class DiffusionModelSchedule:
         )
 
 
+def _compute_min_snr_weights(
+    t: jax.Array, alpha_cumprod: jax.Array, gamma: float = 5.0
+) -> jax.Array:
+    """
+    Computes Min-SNR weights for diffusion training.
+
+    Args:
+        t: Batch of timesteps (B,)
+        alpha_cumprod: The full alpha_cumprod schedule array.
+        gamma: The clamping hyperparameter (default 5.0).
+    """
+    alpha_bar = alpha_cumprod[t]
+
+    snr = alpha_bar / (1 - alpha_bar + 1e-8)
+
+    weights = jnp.minimum(1.0, gamma / snr)
+
+    return weights
+
+
 def _negative_elbo(
     batch: jax.Array,
-    params: FrozenVariableDict,
+    params: FrozenDict,
     apply_fn: Callable,
     schedule: DiffusionModelSchedule,
     key_t: jr.PRNGKey,
     key_eps: jr.PRNGKey,
 ):
+    params, batch = _policy.cast_to_compute((params, batch))
+
     batch_size = batch.shape[0]
     t = jr.randint(key=key_t, minval=0, maxval=schedule.timesteps, shape=(batch_size,))
-    epsilon = jr.normal(key_eps, shape=batch.shape)
-    alpha_bar_t = schedule.alpha_cumprod[t].reshape(batch_size, 1, 1, 1)
+    epsilon = jr.normal(key_eps, shape=batch.shape, dtype=_policy.compute_dtype)
+
+    alpha_bar_t = (
+        schedule.alpha_cumprod[t]
+        .astype(_policy.compute_dtype)
+        .reshape(batch_size, 1, 1, 1)
+    )
     x_t = jnp.sqrt(alpha_bar_t) * batch + jnp.sqrt(1 - alpha_bar_t) * epsilon
     variables = {"params": params}
     epsilon_theta = apply_fn(variables, x_t, t)
     loss = (epsilon_theta - epsilon) ** 2
+    # loss_weights = _compute_min_snr_weights(t, schedule.alpha_cumprod).reshape(
+    #     batch_size, 1, 1, 1
+    # )
 
-    weight = (1 - schedule.alpha_cumprod[t]).reshape(batch_size, 1, 1, 1)
-    weighted_loss = weight * loss
-    neg_elbo = weighted_loss.astype(jnp.float32).mean()
-    return neg_elbo
+    loss_weights = (1 - schedule.alpha_cumprod[t]).reshape(batch_size, 1, 1, 1)
+
+    loss_weights = loss_weights.astype(_policy.compute_dtype)
+
+    loss = loss * loss_weights
+    return _policy.cast_to_output(loss.mean())
 
 
 @jax.jit
@@ -125,12 +185,19 @@ def diffusion_train_step_with_ivon(
         )
 
     params = state.params
+    opt_state_dtypes = jax.tree.map(lambda x: x.dtype, state.opt_state)
 
     def mc_step(opt_state, key):
         key_t, key_eps, key = jr.split(key, num=3)
         psample, opt_state = sample_parameters(key, params, opt_state)
         updates = jax.grad(loss)(psample, key_t, key_eps)
-        return accumulate_gradients(updates, opt_state), None
+        updates = jax.tree.map(lambda x: x.astype(jnp.float32), updates)
+        opt_state = accumulate_gradients(updates, opt_state)
+        opt_state = jax.tree.map(
+            lambda x, dtype: x.astype(dtype), opt_state, opt_state_dtypes
+        )
+
+        return opt_state, None
 
     opt_state, _ = scan(mc_step, state.opt_state, mc_keys[:-1])
 
@@ -160,33 +227,36 @@ def diffusion_train_step_with_ivon(
 
 def diffusion_sample(
     model: nn.Module,
-    variables: FrozenVariableDict,
+    variables: FrozenDict,
     shape: Tuple,
     key: jr.PRNGKey,
     schedule: DiffusionModelSchedule,
     dtype: Dtype = jnp.float32,
 ):
-    """
-    Sampling from a diffusion model
-    Implements algorithm 2 from https://arxiv.org/pdf/2006.11239
-    """
     batch_size = shape[0]
 
     key, subkey = jr.split(key)
+
     x_t = jr.normal(key=subkey, shape=shape, dtype=dtype)
+    variables_compute = _policy.cast_to_compute(variables)
 
     def reverse_step(carry, t):
         x_t, key = carry
+
         t_arr = jnp.full((batch_size,), t, dtype=dtype)
         key, subkey = jr.split(key)
+
         z = cond(
             t > 0,
-            lambda _: jr.normal(key=subkey, shape=shape),
-            lambda _: jnp.zeros(shape),
+            lambda _: jr.normal(key=subkey, shape=shape, dtype=dtype),
+            lambda _: jnp.zeros(shape, dtype=dtype),
             None,
         )
 
-        predicted_noise = model.apply(variables, x_t, t_arr)
+        x_t_compute, t_arr_compute = _policy.cast_to_compute((x_t, t_arr))
+        predicted_noise = model.apply(variables_compute, x_t_compute, t_arr_compute)
+        predicted_noise = _policy.cast_to_output(predicted_noise)
+
         alpha_t = schedule.alpha[t]
         alpha_t_bar = schedule.alpha_cumprod[t]
         beta_t = schedule.beta[t]

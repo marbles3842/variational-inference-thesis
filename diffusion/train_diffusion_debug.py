@@ -99,14 +99,17 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    ivon_config = load_diffusion_ivon_config(filename="config_debug.yaml")
+    ivon_config = load_diffusion_ivon_config()
 
     devices = jax.devices()
 
     device_mesh = mesh_utils.create_device_mesh((len(devices),))
     mesh = Mesh(device_mesh, axis_names=("data",))
 
-    total_batch_size = jax.device_count() * ivon_config["batch_size"]
+    total_batch_size = ivon_config["batch_size"]
+
+    num_devices = jax.device_count()
+    per_device_batch_size = total_batch_size // num_devices
 
     images = get_mnist_dataset(
         train_batch_size=total_batch_size,
@@ -115,6 +118,7 @@ if __name__ == "__main__":
     )
 
     print(f"Total batch size across devices: {total_batch_size}")
+    print(f"Per device batch size across devices: {per_device_batch_size}")
 
     tx = ivon(
         learning_rate=ivon_config["learning_rate"],
@@ -144,7 +148,7 @@ if __name__ == "__main__":
     diffusion_step_key = jr.key(args.diffusion_step_seed)
 
     diffusion = DiffusionModelSchedule.create(
-        timesteps=ivon_config["diffusion_timesteps"], dtype=jnp.float32
+        timesteps=ivon_config["diffusion_timesteps"]
     )
 
     mgpu_diffusion_train_step = create_mgpu_diffusion_train_step(mesh)
@@ -171,9 +175,8 @@ if __name__ == "__main__":
             if (step + 1) % num_steps_per_epoch == 0:
 
                 for metric, value in state.metrics.compute().items():
-                    print(f"train: {metric}: {value}")
-
                     # logger.update("train", metric, value)
+                    print(f"train {metric}: {value}")
 
                 state = state.replace(metrics=state.metrics.empty())
 
