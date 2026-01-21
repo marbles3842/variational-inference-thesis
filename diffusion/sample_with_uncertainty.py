@@ -1,18 +1,19 @@
 import jax
 from typing import Tuple
-from jax import vmap
+from jax.lax import map
 import jax.random as jr
 import jax.numpy as jnp
-import numpy as np
 
 from trainer.diffusion import DiffusionModelSchedule, diffusion_sample
 
-from .semantic_likelihood import init_semantic_likelihood
 from models.unet import Unet_MNIST
 from data_loaders.mnist import MNISTInfo
 
 from core.ivon import sample_parameters
 from core.serialization import load_ivon_state, load_model_params
+
+from .semantic_likelihood import init_semantic_likelihood
+from .utils import load_diffusion_ivon_config
 
 
 if __name__ == "__main__":
@@ -25,14 +26,6 @@ if __name__ == "__main__":
         type=int,
         default=0,
         help="seed for initializing the model",
-    )
-
-    parser.add_argument(
-        "--diffusion-timesteps",
-        type=int,
-        required=True,
-        default=1000,
-        help="Diffusion timesteps",
     )
 
     parser.add_argument(
@@ -88,6 +81,8 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
+    ivon_config = load_diffusion_ivon_config()
+
     semantic_likelihood, sem_params = init_semantic_likelihood(
         rng=jr.key(args.init_seed)
     )
@@ -98,10 +93,12 @@ if __name__ == "__main__":
         jr.key(args.init_seed), jnp.zeros((1, *MNISTInfo.shape)), jnp.zeros((1,))
     )
 
-    opt_params = load_model_params(args.model, unet_vars["params"])
+    mean_params = load_model_params(args.model, unet_vars["params"])
     ivon_state = load_ivon_state(args.opt_state, unet_vars["params"])
 
-    diffusion = DiffusionModelSchedule.create(timesteps=args.diffusion_timesteps)
+    diffusion = DiffusionModelSchedule.create(
+        timesteps=ivon_config["diffusion_timesteps"]
+    )
 
     def gaussian_entropy(e: jax.Array, sigma_squared: float):
         """
@@ -127,36 +124,30 @@ if __name__ == "__main__":
         https://arxiv.org/pdf/2502.20946
 
         """
-
         key_diffusion, key_mc = jr.split(key)
-        mc_keys = jr.split(key_mc, num=mc_samples)
-        x0 = diffusion_sample(
-            model=unet,
-            variables={"params": opt_params},
-            shape=shape,
-            key=key_diffusion,
-            schedule=diffusion,
-        )
-        e0 = semantic_likelihood.apply({"params": sem_params}, x0, True)
 
-        def mc_sample(key):
-            psample, _ = sample_parameters(key, opt_params, (ivon_state,))
-            xm = diffusion_sample(
+        def diffuse_and_embed(params):
+            x = diffusion_sample(
                 model=unet,
-                variables={"params": psample},
+                variables={"params": params},
                 shape=shape,
                 key=key_diffusion,
                 schedule=diffusion,
             )
+            e = semantic_likelihood.apply({"params": sem_params}, x, True)
+            return x, e
 
-            return semantic_likelihood.apply({"params": sem_params}, xm, True)
+        x0, e0 = diffuse_and_embed(mean_params)
 
-        e = vmap(mc_sample)(mc_keys)
+        def mc_sample(key):
+            psample, _ = sample_parameters(key, mean_params, (ivon_state,))
+            _, em = diffuse_and_embed(psample)
+            return em
+
+        e = map(mc_sample, jr.split(key_mc, num=mc_samples))
         e = jnp.concatenate([e0[None, ...], e])
 
-        entropy = gaussian_entropy(e=e, sigma_squared=sem_variance**2)
-
-        return x0, entropy
+        return x0, gaussian_entropy(e=e, sigma_squared=sem_variance**2)
 
     samples, entropy = sample_with_uncertainty(
         key=jr.key(args.samples_seed),
@@ -171,6 +162,6 @@ if __name__ == "__main__":
         args.samples_output_dir, f"entropy-seed-{args.samples_seed}.npy"
     )
 
-    np.save(samples_output_dir, np.array(samples))
+    jnp.save(samples_output_dir, samples)
 
-    np.save(entropy_output_dir, np.array(entropy))
+    jnp.save(entropy_output_dir, entropy)
