@@ -44,14 +44,6 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--num-samples",
-        type=int,
-        required=True,
-        default=36,
-        help="Number of samples to generate",
-    )
-
-    parser.add_argument(
         "--mc-samples",
         type=int,
         default=16,
@@ -141,15 +133,15 @@ if __name__ == "__main__":
 
         def mc_sample(key):
             psample, _ = sample_parameters(key, mean_params, (ivon_state,))
-            _, em = diffuse_and_embed(psample)
-            return em
+            xm, em = diffuse_and_embed(psample)
+            return xm, em
 
-        e = map(mc_sample, jr.split(key_mc, num=mc_samples))
+        xs, e = map(mc_sample, jr.split(key_mc, num=mc_samples))
         e = jnp.concatenate([e0[None, ...], e])
 
-        return x0, gaussian_entropy(e=e, sigma_squared=sem_variance**2)
+        return x0, xs, gaussian_entropy(e=e, sigma_squared=sem_variance**2)
 
-    samples, entropy = sample_with_uncertainty(
+    samples, xs, entropy = sample_with_uncertainty(
         key=jr.key(args.samples_seed),
         shape=(args.batch_size, *MNISTInfo.shape),
         mc_samples=args.mc_samples,
@@ -158,6 +150,10 @@ if __name__ == "__main__":
     samples_output_dir = os.path.join(
         args.samples_output_dir, f"samples-seed-{args.samples_seed}.npy"
     )
+
+    samples_xs_output_dir = os.path.join(
+        args.samples_output_dir, f"samples-xs-seed-{args.samples_seed}.npy"
+    )
     entropy_output_dir = os.path.join(
         args.samples_output_dir, f"entropy-seed-{args.samples_seed}.npy"
     )
@@ -165,3 +161,5 @@ if __name__ == "__main__":
     jnp.save(samples_output_dir, samples)
 
     jnp.save(entropy_output_dir, entropy)
+
+    jnp.save(samples_xs_output_dir, xs)
