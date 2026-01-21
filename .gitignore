@@ -9,3 +9,5 @@ debug/
 *.sh
 *.png
 *.msgpack
+*.npy
+*.csv
