@@ -26,11 +26,6 @@ from etils import epath
 
 training = ocp.training
 
-root_directory = epath.Path(
-    "/zhome/da/9/204020/variational-inference-thesis/ddpm-checkpoints"
-)
-# root_directory.rmtree(missing_ok=True)
-
 
 def get_sharding_for_leaf(leaf):
     if jnp.ndim(leaf) == 0:
@@ -183,7 +178,7 @@ if __name__ == "__main__":
     num_steps_per_epoch = MNISTInfo.train_length // total_batch_size
 
     with MetricsLogger(args.logs) as logger:
-        with training.Checkpointer(root_directory) as ckptr:  # TODO: update to args!
+        with training.Checkpointer(epath.Path(args.checkpoint_dir)) as ckptr:
 
             latest_info = ckptr.latest
             start_step = 0
@@ -203,7 +198,6 @@ if __name__ == "__main__":
             print(f"Latest step: {latest_step}")
 
             for step, batch in enumerate(images, start=latest_step + 1):
-                batch = batch.astype(jnp.bfloat16)
                 batch = jax.device_put(batch, get_data_sharding(mesh))
 
                 main_mc_rng, step_mc_rng = jr.split(main_mc_rng)
@@ -215,7 +209,7 @@ if __name__ == "__main__":
                     jr.split(step_mc_rng, num=ivon_config["train_mc_samples"]),
                 )
 
-                if step + 1 % num_steps_per_epoch == 0:
+                if step % num_steps_per_epoch == 0:
 
                     saved = ckptr.save_checkpointables(
                         step, dict(pytree=state, dataset={"step": step})
@@ -225,7 +219,7 @@ if __name__ == "__main__":
 
                     assert saved
 
-                    print(f"Saved checkpoint at {step + 1}")
+                    print(f"Saved checkpoint at {step}")
 
                     for metric, value in state.metrics.compute().items():
                         logger.update("train", metric, value)

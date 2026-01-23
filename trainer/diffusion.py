@@ -70,26 +70,6 @@ class DiffusionModelSchedule:
         )
 
 
-def _compute_min_snr_weights(
-    t: jax.Array, alpha_cumprod: jax.Array, gamma: float = 5.0
-) -> jax.Array:
-    """
-    Computes Min-SNR weights for diffusion training.
-
-    Args:
-        t: Batch of timesteps (B,)
-        alpha_cumprod: The full alpha_cumprod schedule array.
-        gamma: The clamping hyperparameter (default 5.0).
-    """
-    alpha_bar = alpha_cumprod[t]
-
-    snr = alpha_bar / (1 - alpha_bar + 1e-8)
-
-    weights = jnp.minimum(1.0, gamma / snr)
-
-    return weights
-
-
 def _negative_elbo(
     batch: jax.Array,
     params: FrozenDict,
@@ -113,9 +93,6 @@ def _negative_elbo(
     variables = {"params": params}
     epsilon_theta = apply_fn(variables, x_t, t)
     loss = (epsilon_theta - epsilon) ** 2
-    # loss_weights = _compute_min_snr_weights(t, schedule.alpha_cumprod).reshape(
-    #     batch_size, 1, 1, 1
-    # )
 
     loss_weights = (1 - schedule.alpha_cumprod[t]).reshape(batch_size, 1, 1, 1)
 
