@@ -1,3 +1,4 @@
+import itertools
 import jax
 import jax.numpy as jnp
 import jax.random as jr
@@ -18,6 +19,17 @@ from core.ivon import ivon
 from core.serialization import save_params
 
 from .utils import load_diffusion_ivon_config
+
+from orbax.checkpoint import v1 as ocp
+from etils import epath
+
+
+training = ocp.training
+
+root_directory = epath.Path(
+    "/zhome/da/9/204020/variational-inference-thesis/ddpm-checkpoints"
+)
+# root_directory.rmtree(missing_ok=True)
 
 
 def get_sharding_for_leaf(leaf):
@@ -48,6 +60,12 @@ def create_mgpu_diffusion_train_step(mesh):
         out_shardings=(state_sharding, replicated_sharding),
         donate_argnums=(0,),
     )
+
+
+def fast_forward_iterator(iterator, n_steps):
+    if n_steps > 0:
+        print(f"Fast-forwarding dataset by {n_steps} steps...")
+        next(itertools.islice(iterator, n_steps, n_steps), None)
 
 
 if __name__ == "__main__":
@@ -95,6 +113,13 @@ if __name__ == "__main__":
         default="logs.csv",
         metavar="V",
         help="Log file for training",
+    )
+
+    parser.add_argument(
+        "--checkpoint-dir",
+        type=str,
+        required=True,
+        help="Directory for checkpoints",
     )
 
     args = parser.parse_args()
@@ -158,28 +183,56 @@ if __name__ == "__main__":
     num_steps_per_epoch = MNISTInfo.train_length // total_batch_size
 
     with MetricsLogger(args.logs) as logger:
+        with training.Checkpointer(root_directory) as ckptr:  # TODO: update to args!
 
-        for step, batch in enumerate(images):
-            batch = batch.astype(jnp.bfloat16)
-            batch = jax.device_put(batch, get_data_sharding(mesh))
+            latest_info = ckptr.latest
+            start_step = 0
 
-            main_mc_rng, step_mc_rng = jr.split(main_mc_rng)
-            state, diffusion_step_key = mgpu_diffusion_train_step(
-                state,
-                batch,
-                diffusion_step_key,
-                diffusion,
-                jr.split(step_mc_rng, num=ivon_config["train_mc_samples"]),
-            )
+            if latest_info is not None:
+                print(
+                    f"Found checkpoint at step {latest_info}.  DS start step = {start_step}. Restoring..."
+                )
 
-            if (step + 1) % num_steps_per_epoch == 0:
+                state = ckptr.load_pytree(abstract_pytree=state)
+                latest_step = latest_info.step
+                fast_forward_iterator(images, latest_step)
+            else:
+                latest_step = 0
+                print("No checkpoint found. Starting from scratch.")
 
-                for metric, value in state.metrics.compute().items():
-                    logger.update("train", metric, value)
+            print(f"Latest step: {latest_step}")
 
-                state = state.replace(metrics=state.metrics.empty())
+            for step, batch in enumerate(images, start=latest_step + 1):
+                batch = batch.astype(jnp.bfloat16)
+                batch = jax.device_put(batch, get_data_sharding(mesh))
 
-                logger.end_epoch()
+                main_mc_rng, step_mc_rng = jr.split(main_mc_rng)
+                state, diffusion_step_key = mgpu_diffusion_train_step(
+                    state,
+                    batch,
+                    diffusion_step_key,
+                    diffusion,
+                    jr.split(step_mc_rng, num=ivon_config["train_mc_samples"]),
+                )
+
+                if step + 1 % num_steps_per_epoch == 0:
+
+                    saved = ckptr.save_checkpointables(
+                        step, dict(pytree=state, dataset={"step": step})
+                    )
+
+                    saved = ckptr.save_pytree(step, state)
+
+                    assert saved
+
+                    print(f"Saved checkpoint at {step + 1}")
+
+                    for metric, value in state.metrics.compute().items():
+                        logger.update("train", metric, value)
+
+                    state = state.replace(metrics=state.metrics.empty())
+
+                    logger.end_epoch()
 
     save_params(f"ddpm-ivon-{args.init_seed}.msgpack", state.params)
     save_params(f"ddpm-ivon-state-{args.init_seed}.msgpack", state.opt_state[0])
