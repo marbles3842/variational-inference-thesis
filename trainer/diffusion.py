@@ -31,14 +31,6 @@ def _linear_beta_schedule(
     return jnp.linspace(beta_start, beta_end, timesteps, dtype=dtype)
 
 
-def _cosine_beta_schedule(timesteps: int, s: float = 0.008, dtype: Dtype = jnp.float32):
-    t = jnp.linspace(0, timesteps, timesteps + 1)
-    f = lambda t: jnp.cos((t / timesteps + s) / (1 + s) * 0.5 * jnp.pi) ** 2
-    alpha_cumprod = f(t) / f(0)
-    betas = 1 - (alpha_cumprod[1:] / alpha_cumprod[:-1])
-    return jnp.clip(betas, 0.0001, 0.9999).astype(dtype)
-
-
 @dataclass
 class DiffusionModelSchedule:
     beta: jax.Array
@@ -47,19 +39,8 @@ class DiffusionModelSchedule:
     timesteps: int = field(pytree_node=False)
 
     @classmethod
-    def create(
-        cls, timesteps: int, schedule_type: str = "linear", dtype: Dtype = jnp.float32
-    ):
-        match schedule_type:
-            case "cosine":
-                beta = _cosine_beta_schedule(timesteps=timesteps, dtype=dtype)
-            case "linear":
-                beta = _linear_beta_schedule(timesteps=timesteps, dtype=dtype)
-            case _:
-                raise ValueError(
-                    f"Schedule type must be 'cosine' or 'linear', got '{schedule_type}'"
-                )
-
+    def create(cls, timesteps: int, dtype: Dtype = jnp.float32):
+        beta = _linear_beta_schedule(timesteps=timesteps, dtype=dtype)
         alpha = 1.0 - beta
         alpha_cumprod = jnp.cumprod(alpha)
         return cls(
