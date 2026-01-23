@@ -177,8 +177,13 @@ if __name__ == "__main__":
 
     num_steps_per_epoch = MNISTInfo.train_length // total_batch_size
 
+    preservation_policies = training.preservation_policies.LatestN(n=5)
+
     with MetricsLogger(args.logs) as logger:
-        with training.Checkpointer(epath.Path(args.checkpoint_dir)) as ckptr:
+        with training.Checkpointer(
+            directory=epath.Path(args.checkpoint_dir),
+            preservation_policy=preservation_policies,
+        ) as ckptr:
 
             latest_info = ckptr.latest
             start_step = 0
@@ -209,11 +214,7 @@ if __name__ == "__main__":
                     jr.split(step_mc_rng, num=ivon_config["train_mc_samples"]),
                 )
 
-                if step % num_steps_per_epoch == 0:
-
-                    saved = ckptr.save_checkpointables(
-                        step, dict(pytree=state, dataset={"step": step})
-                    )
+                if (step + 1) % num_steps_per_epoch == 0:
 
                     saved = ckptr.save_pytree(step, state)
 
