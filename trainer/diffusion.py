@@ -113,9 +113,11 @@ def _negative_elbo(
     variables = {"params": params}
     epsilon_theta = apply_fn(variables, x_t, t)
     loss = (epsilon_theta - epsilon) ** 2
-    loss_weights = _compute_min_snr_weights(t, schedule.alpha_cumprod).reshape(
-        batch_size, 1, 1, 1
-    )
+    # loss_weights = _compute_min_snr_weights(t, schedule.alpha_cumprod).reshape(
+    #     batch_size, 1, 1, 1
+    # )
+
+    loss_weights = (1 - schedule.alpha_cumprod[t]).reshape(batch_size, 1, 1, 1)
 
     loss_weights = loss_weights.astype(_policy.compute_dtype)
 
