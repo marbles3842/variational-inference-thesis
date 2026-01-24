@@ -155,7 +155,7 @@ class ResnetBlock(nn.Module):
         out = block()(out)
 
         if x.shape[-1] != self.features:
-            x = nn.Conv(self.features, kernel_size=(1, 1))(x)
+            x = nn.Conv(self.features, kernel_size=(1, 1), dtype=self.dtype)(x)
 
         return x + out
 
