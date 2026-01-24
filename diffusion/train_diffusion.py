@@ -110,11 +110,18 @@ if __name__ == "__main__":
         help="Log file for training",
     )
 
+    # parser.add_argument(
+    #     "--checkpoint-dir",
+    #     type=str,
+    #     required=True,
+    #     help="Directory for checkpoints",
+    # )
+
     parser.add_argument(
-        "--checkpoint-dir",
-        type=str,
+        "--hess-init",
+        type=float,
         required=True,
-        help="Directory for checkpoints",
+        help="Init value of the Hessian",
     )
 
     args = parser.parse_args()
@@ -179,7 +186,7 @@ if __name__ == "__main__":
 
     preservation_policies = training.preservation_policies.LatestN(n=5)
 
-    with MetricsLogger(args.logs) as logger:
+    with MetricsLogger(f"logs-{args.hess_init}.csv") as logger:
         with training.Checkpointer(
             directory=epath.Path(args.checkpoint_dir),
             preservation_policy=preservation_policies,
