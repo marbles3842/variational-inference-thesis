@@ -73,7 +73,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    ivon_config = load_diffusion_ivon_config()
+    config = load_diffusion_ivon_config()
 
     semantic_likelihood, sem_params = init_semantic_likelihood(
         rng=jr.key(args.init_seed)
@@ -88,9 +88,7 @@ if __name__ == "__main__":
     mean_params = load_model_params(args.model, unet_vars["params"])
     ivon_state = load_ivon_state(args.opt_state, unet_vars["params"])
 
-    diffusion = DiffusionModelSchedule.create(
-        timesteps=ivon_config["diffusion_timesteps"]
-    )
+    diffusion = DiffusionModelSchedule.create(timesteps=config["diffusion_timesteps"])
 
     def gaussian_entropy(e: jax.Array, sigma_squared: float):
         """
@@ -109,7 +107,7 @@ if __name__ == "__main__":
         return entropy
 
     def sample_with_uncertainty(
-        key: jr.PRNGKey, shape: Tuple, mc_samples: int, sem_variance: float = 0.01
+        key: jr.PRNGKey, shape: Tuple, mc_samples: int, sem_variance: float
     ):
         """
         Algorithm 1 from Generative Uncertainty in Diffusion Models:
@@ -145,6 +143,7 @@ if __name__ == "__main__":
         key=jr.key(args.samples_seed),
         shape=(args.batch_size, *MNISTInfo.shape),
         mc_samples=args.mc_samples,
+        sem_variance=config["semantic_likelihood_noise"],
     )
 
     samples_output_dir = os.path.join(
