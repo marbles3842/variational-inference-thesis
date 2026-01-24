@@ -215,11 +215,11 @@ if __name__ == "__main__":
 
                 if (step + 1) % num_steps_per_epoch == 0:
 
-                    saved = ckptr.save_pytree(step, state)
+                    # saved = ckptr.save_pytree(step, state)
 
-                    assert saved
+                    # assert saved
 
-                    print(f"Saved checkpoint at {step}")
+                    # print(f"Saved checkpoint at {step}")
 
                     for metric, value in state.metrics.compute().items():
                         logger.update("train", metric, value)
@@ -228,5 +228,5 @@ if __name__ == "__main__":
 
                     logger.end_epoch()
 
-    save_params(f"ddpm-ivon-{args.init_seed}.msgpack", state.params)
-    save_params(f"ddpm-ivon-state-{args.init_seed}.msgpack", state.opt_state[0])
+    # save_params(f"ddpm-ivon-{args.init_seed}.msgpack", state.params)
+    # save_params(f"ddpm-ivon-state-{args.init_seed}.msgpack", state.opt_state[0])
