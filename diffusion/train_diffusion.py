@@ -151,7 +151,7 @@ if __name__ == "__main__":
         learning_rate=ivon_config["learning_rate"],
         weight_decay=ivon_config["weight_decay"],
         ess=ivon_config["ess"],
-        hess_init=ivon_config["hess_init"],
+        hess_init=args.hess_init,
         clip_radius=ivon_config["clip_radius"],
         rescale_lr=ivon_config["rescale_lr"],
     )
