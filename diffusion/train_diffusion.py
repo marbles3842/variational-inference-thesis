@@ -124,6 +124,13 @@ if __name__ == "__main__":
         help="Init value of the Hessian",
     )
 
+    parser.add_argument(
+        "--mc-samples",
+        type=int,
+        required=True,
+        help="Init value of train MC samples for IVON",
+    )
+
     args = parser.parse_args()
 
     ivon_config = load_diffusion_ivon_config()
@@ -186,7 +193,7 @@ if __name__ == "__main__":
 
     preservation_policies = training.preservation_policies.LatestN(n=5)
 
-    with MetricsLogger(f"logs-{args.hess_init}.csv") as logger:
+    with MetricsLogger(f"logs-{args.hess_init}-{args.mc_samples}.csv") as logger:
         with training.Checkpointer(
             directory=epath.Path("/tmp/сheckpoints"),
             preservation_policy=preservation_policies,
@@ -217,7 +224,7 @@ if __name__ == "__main__":
                     batch,
                     diffusion_step_key,
                     diffusion,
-                    jr.split(step_mc_rng, num=ivon_config["train_mc_samples"]),
+                    jr.split(step_mc_rng, num=args.mc_samples),
                 )
 
                 if (step + 1) % num_steps_per_epoch == 0:
