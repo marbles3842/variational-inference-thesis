@@ -151,7 +151,7 @@ if __name__ == "__main__":
 
     print(f"Trained with parameters: {ivon_config}")
 
-    model = Unet_MNIST()
+    model = Unet_MNIST(dtype=jnp.bfloat16)
 
     state = create_train_state(
         model,
@@ -168,7 +168,7 @@ if __name__ == "__main__":
     diffusion_step_key = jr.key(args.diffusion_step_seed)
 
     diffusion = DiffusionModelSchedule.create(
-        timesteps=ivon_config["diffusion_timesteps"],
+        timesteps=ivon_config["diffusion_timesteps"], dtype=jnp.bfloat16
     )
 
     mgpu_diffusion_train_step = create_mgpu_diffusion_train_step(mesh)
