@@ -188,7 +188,7 @@ if __name__ == "__main__":
 
     with MetricsLogger(f"logs-{args.hess_init}.csv") as logger:
         with training.Checkpointer(
-            directory=epath.Path(args.checkpoint_dir),
+            directory=epath.Path("/tmp/сheckpoints"),
             preservation_policy=preservation_policies,
         ) as ckptr:
 
