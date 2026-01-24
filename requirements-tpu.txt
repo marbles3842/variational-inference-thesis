@@ -4,7 +4,7 @@ flax
 optax
 clu
 pyyaml
-datasets>=2.16.0
-pyarrow>=14.0.1
+datasets
+Pillow
 grain
 git+https://github.com/deepmind/jmp
