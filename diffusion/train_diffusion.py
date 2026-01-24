@@ -186,11 +186,10 @@ if __name__ == "__main__":
         ) as ckptr:
 
             latest_info = ckptr.latest
-            start_step = 0
 
             if latest_info is not None:
                 print(
-                    f"Found checkpoint at step {latest_info}.  DS start step = {start_step}. Restoring..."
+                    f"Found checkpoint at step {latest_info}.  DS start step. Restoring..."
                 )
 
                 state = ckptr.load_pytree(abstract_pytree=state)
