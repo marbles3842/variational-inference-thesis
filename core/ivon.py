@@ -79,7 +79,10 @@ def accumulate_gradients(
     else:
         grad_acc = jtree.map(lambda a, g: a + g, grad_acc, updates)
         nxg_acc = jtree.map(lambda a, g, n: a + n * g, nxg_acc, updates, noise)
-    ivonstate = IVONState(*ivonstate[:-4], grad_acc, nxg_acc, None, old_count + 1)
+    zeros_noise = jtree.map(jnp.zeros_like, noise)
+    ivonstate = IVONState(
+        *ivonstate[:-4], grad_acc, nxg_acc, zeros_noise, old_count + 1
+    )
     states = (ivonstate, *states[1:])
     return states
 
@@ -105,9 +108,9 @@ def ivon_init(
         hess,
         axis_name,
         0,
-        None,
-        None,
-        None,
+        jtree.map(zeros_like, params),
+        jtree.map(zeros_like, params),
+        jtree.map(zeros_like, params),
         0,
     )
 
@@ -183,9 +186,9 @@ def ivon_update(
         hess,
         axis_name,
         current_step,
-        None,
-        None,
-        None,
+        jtree.map(jnp.zeros_like, params),
+        jtree.map(jnp.zeros_like, params),
+        jtree.map(jnp.zeros_like, params),
         0,
     )
 

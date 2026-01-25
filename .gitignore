@@ -5,4 +5,9 @@ __pycache__/
 data
 out
 checkpoints
+debug/
 *.sh
+*.png
+*.msgpack
+*.npy
+*.csv
