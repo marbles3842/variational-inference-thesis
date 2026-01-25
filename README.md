@@ -23,19 +23,21 @@ The main focus of this thesis is variational inference for Bayesian neural netwo
   - [Testing](#testing)
     - [Testing SGD, AdamW, or IVON@mean](#testing-sgd-adamw-or-ivonmean)
     - [Testing IVON with Sampling](#testing-ivon-with-sampling)
+- [Diffusion Models](#diffusion-models)
+  - [Training DDPM](#training-ddpm)
 
 ## Project Structure
 
 ```
-├── baseline/         # Baseline implementations from the paper
-├── checkpoints/      # Model checkpoints and saved states
-├── core/             # Base classes and methods (e.g IVON)
-├── data/             # Raw datasets and processed data
-├── data_loaders/     # Data loading utilities and pipelines
+├── baseline/         # Baseline implementations (SGD, AdamW, IVON on CIFAR-10)
+├── core/             # Base classes and methods (e.g., IVON optimizer)
+├── data_loaders/     # Data loading utilities and pipelines (CIFAR-10, MNIST)
+├── diffusion/        # Diffusion model implementations (DDPM training and sampling)
 ├── logger/           # Logging configuration and utilities
-├── models/           # Neural network model definitions
-├── out/              # Output logs and results
-└── trainer/          # Training utils
+├── models/           # Neural network model definitions (ResNet, DenseNet, UNet)
+├── trainer/          # Training utilities (training steps, evaluation, metrics)
+├── trained/          # Pre-trained model weights and logs
+└── requirements-*.txt # Dependency files (CUDA, TPU variants)
 ```
 *Note: The `checkpoints/`, `data/`, and `out/` directories are included in `.gitignore` and will be created during runtime.*
 
@@ -138,3 +140,43 @@ python -m baseline.test_ivon \
   --hessian 0.5 \
   --logdir out/ivon
 ```
+
+## Diffusion Models
+
+This project includes implementations of Denoising Diffusion Probabilistic Models (DDPM) trained using the IVON optimizer for uncertainty quantification.
+
+### Training DDPM
+
+Use [diffusion/train_diffusion.py](diffusion/train_diffusion.py) to train a DDPM on MNIST with IVON:
+
+The training configuration is loaded from [diffusion/diffusion_train_config.yaml](diffusion/diffusion_train_config.yaml).
+
+```bash
+python -m diffusion.train_diffusion \
+  --init-seed 0 \
+  --train-mc-samples-seed 1 \
+  --samples-seed 42 \
+  --diffusion-step-seed 68 \
+  --num-samples 16 \
+  --logs logs-ddpm.csv \
+  --checkpoint-dir checkpoints/ddpm
+```
+
+**Key arguments:**
+- `--init-seed`: Seed for model initialization
+- `--train-mc-samples-seed`: Seed for Monte Carlo samples during training
+- `--samples-seed`: Seed for sample generation
+- `--diffusion-step-seed`: Seed for diffusion step sampling
+- `--num-samples`: Number of samples to generate
+- `--logs`: CSV file to log training metrics
+- `--checkpoint-dir`: Directory to save model checkpoints
+
+Trained models and logs are saved in the [trained/ddpm/](trained/ddpm/) directory.
+
+### Sampling with Uncertainty
+
+Use [diffusion/sample_with_uncertainty.py](diffusion/sample_with_uncertainty.py) to generate samples and uncertainty estimates from a trained DDPM model.
+
+Use [diffusion/semantic_likelihood.py](diffusion/semantic_likelihood.py) to compute semantic likelihood of generated samples.
+
+A visual example of diffusion sampling can be found in [diffusion/visuals.ipynb](diffusion/visuals.ipynb).
