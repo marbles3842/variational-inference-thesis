@@ -110,12 +110,12 @@ if __name__ == "__main__":
         help="Log file for training",
     )
 
-    parser.add_argument(
-        "--checkpoint-dir",
-        type=str,
-        required=True,
-        help="Directory for checkpoints",
-    )
+    # parser.add_argument(
+    #     "--checkpoint-dir",
+    #     type=str,
+    #     required=True,
+    #     help="Directory for checkpoints",
+    # )
 
     args = parser.parse_args()
 
@@ -180,53 +180,53 @@ if __name__ == "__main__":
     preservation_policies = training.preservation_policies.LatestN(n=5)
 
     with MetricsLogger(args.logs) as logger:
-        with training.Checkpointer(
-            directory=epath.Path(args.checkpoint_dir),
-            preservation_policy=preservation_policies,
-        ) as ckptr:
+        # with training.Checkpointer(
+        #     directory=epath.Path(args.checkpoint_dir),
+        #     preservation_policy=preservation_policies,
+        # ) as ckptr:
 
-            latest_info = ckptr.latest
+        # latest_info = ckptr.latest
 
-            if latest_info is not None:
-                print(
-                    f"Found checkpoint at step {latest_info}.  DS start step. Restoring..."
-                )
+        # if latest_info is not None:
+        #     print(
+        #         f"Found checkpoint at step {latest_info}.  DS start step. Restoring..."
+        #     )
 
-                state = ckptr.load_pytree(abstract_pytree=state)
-                latest_step = latest_info.step
-                fast_forward_iterator(images, latest_step)
-            else:
-                latest_step = 0
-                print("No checkpoint found. Starting from scratch.")
+        #     state = ckptr.load_pytree(abstract_pytree=state)
+        #     latest_step = latest_info.step
+        #     fast_forward_iterator(images, latest_step)
+        # else:
+        #     latest_step = 0
+        #     print("No checkpoint found. Starting from scratch.")
 
-            print(f"Latest step: {latest_step}")
+        # print(f"Latest step: {latest_step}")
 
-            for step, batch in enumerate(images, start=latest_step + 1):
-                batch = jax.device_put(batch, get_data_sharding(mesh))
+        for step, batch in enumerate(images):
+            batch = jax.device_put(batch, get_data_sharding(mesh))
 
-                main_mc_rng, step_mc_rng = jr.split(main_mc_rng)
-                state, diffusion_step_key = mgpu_diffusion_train_step(
-                    state,
-                    batch,
-                    diffusion_step_key,
-                    diffusion,
-                    jr.split(step_mc_rng, num=ivon_config["train_mc_samples"]),
-                )
+            main_mc_rng, step_mc_rng = jr.split(main_mc_rng)
+            state, diffusion_step_key = mgpu_diffusion_train_step(
+                state,
+                batch,
+                diffusion_step_key,
+                diffusion,
+                jr.split(step_mc_rng, num=ivon_config["train_mc_samples"]),
+            )
 
-                if (step + 1) % num_steps_per_epoch == 0:
+            if (step + 1) % num_steps_per_epoch == 0:
 
-                    saved = ckptr.save_pytree(step, state)
+                # saved = ckptr.save_pytree(step, state)
 
-                    assert saved
+                # assert saved
 
-                    print(f"Saved checkpoint at {step}")
+                # print(f"Saved checkpoint at {step}")
 
-                    for metric, value in state.metrics.compute().items():
-                        logger.update("train", metric, value)
+                for metric, value in state.metrics.compute().items():
+                    logger.update("train", metric, value)
 
-                    state = state.replace(metrics=state.metrics.empty())
+                state = state.replace(metrics=state.metrics.empty())
 
-                    logger.end_epoch()
+                logger.end_epoch()
 
     save_params(f"ddpm-ivon-{args.init_seed}.msgpack", state.params)
     save_params(f"ddpm-ivon-state-{args.init_seed}.msgpack", state.opt_state[0])
