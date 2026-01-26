@@ -17,9 +17,9 @@ from core.ivon import sample_parameters, accumulate_gradients
 Dtype = Any
 
 
-_policy = jmp.Policy(
-    param_dtype=jnp.float32, compute_dtype=jnp.bfloat16, output_dtype=jnp.float32
-)
+# _policy = jmp.Policy(
+#     param_dtype=jnp.float32, compute_dtype=jnp.bfloat16, output_dtype=jnp.float32
+# )
 
 
 def _linear_beta_schedule(
@@ -59,15 +59,15 @@ def _negative_elbo(
     key_t: jr.PRNGKey,
     key_eps: jr.PRNGKey,
 ):
-    params, batch = _policy.cast_to_compute((params, batch))
+    # params, batch = _policy.cast_to_compute((params, batch))
 
     batch_size = batch.shape[0]
     t = jr.randint(key=key_t, minval=0, maxval=schedule.timesteps, shape=(batch_size,))
-    epsilon = jr.normal(key_eps, shape=batch.shape, dtype=_policy.compute_dtype)
+    epsilon = jr.normal(key_eps, shape=batch.shape)
 
     alpha_bar_t = (
         schedule.alpha_cumprod[t]
-        .astype(_policy.compute_dtype)
+        # .astype(_policy.compute_dtype)
         .reshape(batch_size, 1, 1, 1)
     )
     x_t = jnp.sqrt(alpha_bar_t) * batch + jnp.sqrt(1 - alpha_bar_t) * epsilon
@@ -77,10 +77,8 @@ def _negative_elbo(
 
     loss_weights = (1 - schedule.alpha_cumprod[t]).reshape(batch_size, 1, 1, 1)
 
-    loss_weights = loss_weights.astype(_policy.compute_dtype)
-
     loss = loss * loss_weights
-    return _policy.cast_to_output(loss.mean())
+    return loss.mean()
 
 
 @jax.jit
@@ -196,7 +194,8 @@ def diffusion_sample(
     key, subkey = jr.split(key)
 
     x_t = jr.normal(key=subkey, shape=shape, dtype=dtype)
-    variables_compute = _policy.cast_to_compute(variables)
+    # variables_compute = _policy.cast_to_compute(variables)
+    variables_compute = variables
 
     def reverse_step(carry, t):
         x_t, key = carry
@@ -211,9 +210,10 @@ def diffusion_sample(
             None,
         )
 
-        x_t_compute, t_arr_compute = _policy.cast_to_compute((x_t, t_arr))
+        # x_t_compute, t_arr_compute = _policy.cast_to_compute((x_t, t_arr))
+        x_t_compute, t_arr_compute = x_t, t_arr
         predicted_noise = model.apply(variables_compute, x_t_compute, t_arr_compute)
-        predicted_noise = _policy.cast_to_output(predicted_noise)
+        # predicted_noise = _policy.cast_to_output(predicted_noise)
 
         alpha_t = schedule.alpha[t]
         alpha_t_bar = schedule.alpha_cumprod[t]
